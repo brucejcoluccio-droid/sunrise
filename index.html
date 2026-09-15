@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Sunrise</title>
+<style>
+  :root{--ink:#c08a4a;--ink-faint:#6b4a28;--ink-bright:#e8b87a;--rule:#2a1c0e}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;overscroll-behavior:none}
+  body{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+       color:var(--ink);-webkit-font-smoothing:antialiased;touch-action:manipulation}
+
+  .layer{position:fixed;inset:0;display:flex;flex-direction:column}
+  #sky{background:#000;z-index:0}
+  #setup{z-index:4;padding:26px 24px calc(24px + env(safe-area-inset-bottom));overflow-y:auto;background:#000}
+  #night{z-index:2;background:transparent;display:none;align-items:center;justify-content:center}
+  #status{z-index:5;position:fixed;inset:0;display:flex;flex-direction:column;
+          align-items:center;justify-content:center;gap:14px;opacity:0;pointer-events:none;
+          transition:opacity .7s ease;padding:24px;text-align:center}
+  #status.show{opacity:1}
+
+  h1{font-size:34px;font-weight:400;margin:6px 0 4px;color:var(--ink-bright)}
+  .sub{font-size:15px;line-height:1.5;color:var(--ink-faint);margin:0 0 26px;max-width:34ch}
+  .field{margin-bottom:22px}
+  .field > span{display:block;font-size:14px;color:var(--ink-faint);margin-bottom:8px}
+  input[type=time]{font-family:inherit;font-size:44px;color:var(--ink-bright);background:#000;
+                   border:0;border-bottom:1px solid var(--rule);padding:2px 0 8px;width:100%}
+  input[type=time]::-webkit-calendar-picker-indicator{filter:invert(.55) sepia(1) saturate(3) hue-rotate(-10deg)}
+  .choices{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+  .chip{font-family:inherit;font-size:17px;color:var(--ink);background:#000;
+        border:1px solid var(--rule);border-radius:2px;padding:11px 16px;min-width:60px}
+  .chip[aria-pressed="true"]{color:#000;background:var(--ink-bright);border-color:var(--ink-bright)}
+  .chip:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--ink-bright);outline-offset:2px}
+  .custom{display:flex;align-items:center;gap:9px}
+  input[type=number]{font-family:inherit;font-size:17px;color:var(--ink-bright);background:#000;
+                     border:1px solid var(--rule);border-radius:2px;padding:11px 8px;width:76px;text-align:center}
+  .unit{font-size:15px;color:var(--ink-faint)}
+  .toggles{display:flex;flex-direction:column;gap:13px;margin-bottom:26px}
+  label.row{display:flex;align-items:center;gap:12px;font-size:16px;line-height:1.35}
+  input[type=checkbox]{width:22px;height:22px;flex:0 0 auto;accent-color:#c08a4a}
+  #arm{font-family:inherit;font-size:20px;width:100%;padding:18px;
+       background:var(--ink-bright);color:#000;border:0;border-radius:2px}
+  .testrow{display:flex;gap:9px;margin-top:12px;align-items:stretch}
+  #test{flex:1;font-family:inherit;font-size:16px;padding:14px;background:#000;
+        color:var(--ink);border:1px solid var(--rule);border-radius:2px}
+  #testmin{width:88px}
+  .note{font-size:13px;line-height:1.55;color:var(--ink-faint);margin-top:18px;max-width:40ch}
+
+  .until{font-size:17px;color:var(--ink)}
+  .tiny{font-size:13.5px;color:var(--ink-faint);line-height:1.5}
+  .pulse{width:9px;height:9px;border-radius:50%;background:var(--ink-bright);animation:beat 3.4s ease-in-out infinite}
+  @keyframes beat{0%,100%{opacity:.25}50%{opacity:1}}
+  @media (prefers-reduced-motion:reduce){.pulse{animation:none;opacity:.7}}
+
+  #seg{position:fixed;z-index:3;left:50%;top:50%;width:74vw;max-width:420px;
+       pointer-events:none;transform:translate(-50%,-50%)}
+  .on{fill:#4a0000}.off{fill:#0b0000}.colon{fill:#4a0000}
+
+  #ring{position:fixed;z-index:6;left:0;right:0;bottom:6vh;display:none;
+        flex-direction:column;align-items:center;gap:14px}
+  #hold{position:relative;overflow:hidden;font-family:inherit;font-size:18px;color:#000;
+        background:rgba(255,255,255,.9);border:0;border-radius:2px;padding:16px 44px}
+  #holdfill{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(0,0,0,.18)}
+  #hold span{position:relative}
+  #snooze{font-family:inherit;font-size:16px;color:rgba(0,0,0,.75);background:transparent;
+          border:1px solid rgba(0,0,0,.35);border-radius:2px;padding:12px 30px}
+  #cancel{font-family:inherit;font-size:15px;color:var(--ink-faint);background:none;
+          border:1px solid var(--rule);border-radius:2px;padding:11px 22px}
+  #nosleep{position:fixed;width:2px;height:2px;opacity:.01;pointer-events:none;left:0;top:0}
+</style>
+</head>
+<body>
+
+<div id="sky" class="layer"></div>
+<video id="nosleep" muted playsinline webkit-playsinline></video>
+<svg id="seg" viewBox="0 0 300 100" style="display:none"></svg>
+<div id="night" class="layer"></div>
+
+<div id="setup" class="layer">
+  <h1>Sunrise</h1>
+  <p class="sub">Face-up on the nightstand, plugged in. Deep red clock overnight, light before the alarm.</p>
+
+  <div class="field">
+    <span>Wake at</span>
+    <input type="time" id="waketime" value="06:30">
+  </div>
+
+  <div class="field">
+    <span>Light starts before</span>
+    <div class="choices" id="durs">
+      <button class="chip" data-min="15">15</button>
+      <button class="chip" data-min="30" aria-pressed="true">30</button>
+      <button class="chip" data-min="45">45</button>
+      <button class="chip" data-min="60">60</button>
+      <span class="custom"><input type="number" id="durcustom" min="1" max="180" step="1" placeholder="min"><span class="unit">min</span></span>
+    </div>
+  </div>
+
+  <div class="toggles">
+    <label class="row"><input type="checkbox" id="useclock" checked> Show the clock overnight in deep red</label>
+    <label class="row"><input type="checkbox" id="usesound" checked> Sound at wake time</label>
+    <label class="row"><input type="checkbox" id="usevibe" checked> Vibrate at wake time</label>
+    <label class="row"><input type="checkbox" id="usealarm"> Backup alarm in the Clock app, 2 min later</label>
+  </div>
+
+  <button id="arm">Set the alarm</button>
+  <div class="testrow">
+    <button id="test">Run a test of</button>
+    <input type="number" id="testmin" min="1" max="60" step="1" value="1" aria-label="test length in minutes">
+    <span class="unit" style="align-self:center">min</span>
+  </div>
+  <p class="note" id="installnote">Tap the screen any time for the readout. It reports the screen lock and the audio state, so a silent alarm tells you which of the two failed.</p>
+</div>
+
+<div id="status">
+  <div class="pulse"></div>
+  <div class="until" id="s_until"></div>
+  <div class="tiny" id="s_wake"></div>
+  <div class="tiny" id="s_lock"></div>
+  <div class="tiny" id="s_audio"></div>
+  <button id="cancel">Cancel alarm</button>
+</div>
+
+<div id="ring">
+  <button id="snooze">Snooze 9 min</button>
+  <button id="hold"><div id="holdfill"></div><span>Hold to stop</span></button>
+</div>
+
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
+(function(){
+  var $=function(id){return document.getElementById(id);};
+  var sky=$('sky'), setup=$('setup'), night=$('night'), status=$('status'),
+      ring=$('ring'), hold=$('hold'), holdfill=$('holdfill'), snooze=$('snooze'),
+      cancel=$('cancel'), vid=$('nosleep'), seg=$('seg');
+
+  var HOLD_MS=800, MAX_RING_MS=15*60*1000, SNOOZE_MS=9*60*1000;
+
+  var durMin=30, wakeAt=null, wakeHH=6, wakeMM=30, byClock=true;
+  var loopId=null, loopIsRaf=false, hideT=null, beat=null, fireT=null,
+      backstop=null, vguard=null, autoOff=null, holdT=null, holdStart=0;
+  var lock=null, lockHow='none', audio=null, live=[], fired=false, fadeSec=45,
+      audioNote='', lastSegMin=-1;
+
+  /* ---------- settings ---------- */
+  function save(){try{localStorage.setItem('sunrise',JSON.stringify({
+    t:$('waketime').value,d:durMin,c:$('useclock').checked,s:$('usesound').checked,
+    v:$('usevibe').checked,a:$('usealarm').checked,tm:$('testmin').value}));}catch(e){}}
+  function load(){try{
+    var o=JSON.parse(localStorage.getItem('sunrise')||'null'); if(!o) return;
+    $('waketime').value=o.t; durMin=o.d;
+    $('useclock').checked=o.c!==false; $('usesound').checked=o.s!==false;
+    $('usevibe').checked=o.v!==false; $('usealarm').checked=!!o.a;
+    if(o.tm) $('testmin').value=o.tm;
+  }catch(e){}}
+  function syncDurUI(){
+    var matched=false;
+    [].forEach.call(document.querySelectorAll('#durs .chip'),function(b){
+      var hit=(+b.dataset.min===durMin); if(hit) matched=true;
+      b.setAttribute('aria-pressed',hit?'true':'false');
+    });
+    $('durcustom').value = matched ? '' : durMin;
+  }
+  load(); syncDurUI();
+
+  /* Standalone means it was installed to the home screen and launched without
+     browser chrome. Until then, say so, because that is the whole point here. */
+  (function(){
+    var standalone = window.matchMedia('(display-mode: standalone)').matches ||
+                     window.navigator.standalone === true;
+    if(!standalone){
+      $('installnote').innerHTML =
+        'Running in a browser tab. Use Chrome\u2019s menu \u2192 <b>Install app</b> ' +
+        '(or Add to Home screen) and launch it from the icon \u2014 that removes the ' +
+        'address bar and enables the real screen lock.';
+      $('installnote').style.color='#c08a4a';
+    }
+  })();
+
+  $('durs').addEventListener('click',function(e){
+    var b=e.target.closest('.chip'); if(!b) return;
+    durMin=+b.dataset.min; syncDurUI();
+  });
+  $('durcustom').addEventListener('input',function(){
+    var v=parseInt(this.value,10);
+    if(v>0&&v<=180){durMin=v;
+      [].forEach.call(document.querySelectorAll('#durs .chip'),function(b){b.setAttribute('aria-pressed','false');});}
+  });
+
+  /* ---------- wake time ----------
+     Re-derived from the wall clock on every pass rather than frozen at arming
+     time, so a time-zone change or a DST shift overnight moves the alarm with
+     the clock instead of firing an hour out. The two-hour grace window stops it
+     jumping to tomorrow the moment it fires. */
+  function nextWake(){
+    var t=new Date(); t.setHours(wakeHH,wakeMM,0,0);
+    if(t.getTime()-Date.now() < -2*3600*1000) t.setDate(t.getDate()+1);
+    return t;
+  }
+  function refreshWake(){ if(byClock&&!fired) wakeAt=nextWake(); }
+
+  /* ---------- screen lock ---------- */
+  function startNoSleepVideo(){
+    try{
+      var c=document.createElement('canvas'); c.width=c.height=2;
+      var ctx=c.getContext('2d');
+      setInterval(function(){ctx.fillStyle='#000';ctx.fillRect(0,0,2,2);},1000);
+      vid.srcObject=c.captureStream(1); vid.loop=true; vid.muted=true;
+      var p=vid.play();
+      if(p&&p.then) p.then(function(){if(lockHow==='none')lockHow='video';}).catch(function(){});
+      else if(lockHow==='none') lockHow='video';
+    }catch(e){}
+  }
+  async function keepAwake(){
+    if(navigator.wakeLock){
+      try{ lock=await navigator.wakeLock.request('screen'); lockHow='wakelock';
+           lock.addEventListener('release',function(){lock=null;}); return; }catch(e){}
+    }
+    startNoSleepVideo();
+  }
+  function releaseAwake(){
+    if(lock){try{lock.release()}catch(e){} lock=null;}
+    try{vid.pause(); vid.srcObject=null;}catch(e){}
+    lockHow='none';
+  }
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState==='visible'&&wakeAt){
+      if(!lock) keepAwake();
+      refreshWake();
+      if(!fired&&Date.now()>=wakeAt) fire();
+    }
+  });
+
+  function goFullscreen(){
+    var el=document.documentElement, fn=el.requestFullscreen||el.webkitRequestFullscreen;
+    if(fn){try{var r=fn.call(el,{navigationUI:'hide'}); if(r&&r.catch) r.catch(function(){});}
+           catch(e){try{fn.call(el)}catch(e2){}}}
+    try{if(screen.orientation&&screen.orientation.lock)screen.orientation.lock('portrait').catch(function(){});}catch(e){}
+  }
+
+  /* ---------- audio ---------- */
+  function openAudio(){
+    try{
+      audio=new (window.AudioContext||window.webkitAudioContext)();
+      var b=audio.createBuffer(1,1,22050), s=audio.createBufferSource();
+      s.buffer=b; s.connect(audio.destination); s.start(0); audio.resume();
+    }catch(e){ audioNote='audio unavailable'; }
+  }
+  /* Each oscillator drops itself from the live list when it ends, so an hour of
+     ringing does not accumulate thousands of dead nodes. */
+  function pulseTone(level){
+    if(!audio) return;
+    try{
+      var t=audio.currentTime, g=audio.createGain();
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(level,t+0.09);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+1.15);
+      g.connect(audio.destination);
+      [392,588,784].forEach(function(f,i){
+        var o=audio.createOscillator(), og=audio.createGain();
+        o.type='sine'; o.frequency.value=f; og.gain.value=[0.7,0.35,0.18][i];
+        o.connect(og); og.connect(g); o.start(t); o.stop(t+1.3);
+        live.push(o);
+        o.onended=function(){
+          try{o.disconnect(); og.disconnect();}catch(e){}
+          var k=live.indexOf(o); if(k>-1) live.splice(k,1);
+        };
+      });
+    }catch(e){}
+  }
+  function startRinging(){
+    if(!$('usesound').checked) return;
+    if(audio&&audio.state==='suspended'){try{audio.resume()}catch(e){}}
+    audioNote = audio ? ('audio '+audio.state) : 'audio unavailable';
+    var t0=Date.now();
+    function r(){ pulseTone(Math.min(0.30, 0.06+0.24*Math.min(1,(Date.now()-t0)/1000/fadeSec))); }
+    r(); beat=setInterval(r,2000);
+  }
+  function stopRinging(){
+    clearInterval(beat); beat=null;
+    live.forEach(function(o){try{o.stop();o.disconnect()}catch(e){}}); live=[];
+    if(audio){try{audio.close()}catch(e){} audio=null;}
+    clearInterval(vguard); vguard=null;
+    try{navigator.vibrate&&navigator.vibrate(0);}catch(e){}
+  }
+
+  /* Offset two minutes past the page alarm so it is a genuine backstop rather
+     than a duplicate going off at the same instant. */
+  function setBackupAlarm(t){
+    if(!$('usealarm').checked) return;
+    var b=new Date(t.getTime()+2*60000);
+    var url='intent://#Intent;action=android.intent.action.SET_ALARM;'+
+            'i.android.intent.extra.alarm.HOUR='+b.getHours()+';'+
+            'i.android.intent.extra.alarm.MINUTES='+b.getMinutes()+';'+
+            'S.android.intent.extra.alarm.MESSAGE=Sunrise%20backup;'+
+            'B.android.intent.extra.alarm.SKIP_UI=true;end';
+    try{window.location.href=url;}catch(e){}
+  }
+
+  /* ---------- seven-segment ---------- */
+  var SEGPATH={a:'12,3 52,3 45,12 19,12',b:'54,5 56,46 48,52 47,14',
+               c:'48,54 56,48 54,91 47,84',d:'19,86 45,86 52,95 12,95',
+               e:'8,48 16,54 17,84 8,91',f:'10,5 18,14 17,52 8,46',
+               g:'18,44 46,44 52,49 46,54 18,54 12,49'};
+  var DIGIT={'0':'abcdef','1':'bc','2':'abged','3':'abgcd','4':'fgbc',
+             '5':'afgcd','6':'afgecd','7':'abc','8':'abcdefg','9':'abcdfg'};
+  (function(){
+    var out='';
+    [0,68,168,236].forEach(function(x,i){
+      out+='<g transform="translate('+x+',0)">';
+      for(var k in SEGPATH) out+='<polygon class="off" data-d="'+i+'" data-s="'+k+'" points="'+SEGPATH[k]+'"/>';
+      out+='</g>';
+    });
+    out+='<circle class="colon" cx="150" cy="38" r="5.5"/><circle class="colon" cx="150" cy="66" r="5.5"/>';
+    seg.innerHTML=out;
+  })();
+  /* Only touches the DOM when the displayed minute actually changes. */
+  function drawSeg(d){
+    var mins=d.getHours()*60+d.getMinutes();
+    if(mins===lastSegMin) return;
+    lastSegMin=mins;
+    var txt=('0'+d.getHours()).slice(-2)+('0'+d.getMinutes()).slice(-2), lead=(txt[0]==='0');
+    [].forEach.call(seg.querySelectorAll('polygon'),function(p){
+      var i=+p.dataset.d, on=DIGIT[txt[i]].indexOf(p.dataset.s)>-1;
+      if(i===0&&lead) on=false;
+      p.setAttribute('class',on?'on':'off');
+    });
+    var n=Math.floor(Date.now()/60000)%4;   /* shift pixels to dodge burn-in */
+    seg.style.transform='translate(-50%,-50%) translate('+[0,3,0,-3][n]+'px,'+[-3,0,3,0][n]+'px)';
+  }
+
+  /* ---------- the light ---------- */
+  var stops=[{p:0.00,c:[8,0,0]},{p:0.14,c:[58,6,0]},{p:0.32,c:[140,28,2]},
+             {p:0.50,c:[210,78,12]},{p:0.68,c:[246,150,58]},
+             {p:0.82,c:[252,206,140]},{p:0.92,c:[250,238,214]},{p:1.00,c:[232,246,255]}];
+  function mix(e){
+    for(var i=1;i<stops.length;i++){
+      if(e<=stops[i].p){
+        var a=stops[i-1],b=stops[i],k=(e-a.p)/(b.p-a.p);
+        return [0,1,2].map(function(j){return Math.round(a.c[j]+(b.c[j]-a.c[j])*k);});
+      }
+    }
+    return [232,246,255];
+  }
+  function paint(p){
+    p=Math.max(0,Math.min(1,p));
+    if(p<=0){sky.style.background='#000'; return 0;}
+    var e=p*p, converge=Math.max(0,(p-0.55)/0.45);
+    var lag=0.30*(1-converge), dim=0.55+0.45*converge, reach=6+p*p*130;
+    var hot=mix(e), edge=mix(Math.max(0,e-lag));
+    var outer=edge.map(function(v){return Math.round(v*dim);});
+    sky.style.background='radial-gradient(circle at 50% 58%, rgb('+hot.join(',')+') 0%, '+
+      'rgb('+edge.join(',')+') '+reach.toFixed(1)+'%, rgb('+outer.join(',')+') 100%)';
+    return p;
+  }
+
+  /* ---------- readouts ---------- */
+  function untilText(ms){
+    var m=Math.max(0,Math.round(ms/60000)), h=Math.floor(m/60);
+    if(ms<60000) return Math.max(0,Math.round(ms/1000))+' sec from now';
+    if(h<1) return m+' min from now';
+    return h+' hr '+(m%60)+' min from now';
+  }
+  function flash(ms){
+    if(!wakeAt) return;
+    $('s_until').textContent = fired ? 'alarm firing' : untilText(wakeAt-Date.now());
+    $('s_wake').textContent='light begins '+durMin+' min earlier';
+    $('s_lock').textContent = lockHow==='wakelock' ? 'screen lock held'
+      : lockHow==='video' ? 'screen held by video fallback' : 'screen lock NOT held';
+    $('s_audio').textContent=(audio?('audio '+audio.state):(audioNote||'audio not opened'))+
+      (navigator.vibrate?' \u00b7 vibrate supported':' \u00b7 no vibrate')+
+      ((document.fullscreenElement||document.webkitFullscreenElement)?' \u00b7 fullscreen':' \u00b7 NOT fullscreen');
+    status.classList.add('show'); status.style.pointerEvents='auto';
+    clearTimeout(hideT);
+    hideT=setTimeout(function(){status.classList.remove('show'); status.style.pointerEvents='none';},ms);
+  }
+
+  /* ---------- firing ---------- */
+  function fire(){
+    if(fired||!wakeAt) return;
+    fired=true;
+    paint(1); seg.style.display='none';
+    startRinging();
+    if($('usevibe').checked&&navigator.vibrate){
+      try{navigator.vibrate([500,700,500,700,500,700,500]);}catch(e){}
+      vguard=setInterval(function(){try{navigator.vibrate([500,700,500]);}catch(e){}},4000);
+    }
+    ring.style.display='flex';
+    clearTimeout(autoOff);
+    autoOff=setTimeout(function(){ if(fired) reset(); }, MAX_RING_MS);
+  }
+
+  function doSnooze(){
+    if(!fired) return;
+    stopRinging(); clearTimeout(autoOff);
+    ring.style.display='none';
+    fired=false; byClock=false;
+    wakeAt=new Date(Date.now()+SNOOZE_MS);
+    durMin=Math.max(1,Math.round(SNOOZE_MS/60000/3));   /* short re-ramp */
+    lastSegMin=-1;
+    seg.style.display=$('useclock').checked?'block':'none';
+    seg.style.opacity=1;
+    openAudio();
+    clearTimeout(fireT);
+    fireT=setTimeout(fire, SNOOZE_MS);
+    flash(3000);
+  }
+  snooze.addEventListener('click',function(e){e.stopPropagation(); doSnooze();});
+
+  /* Hold to stop, so rolling over onto the phone cannot kill the alarm. */
+  function holdBegin(e){
+    e.preventDefault(); e.stopPropagation();
+    holdStart=Date.now();
+    holdfill.style.transition='width '+HOLD_MS+'ms linear';
+    holdfill.style.width='100%';
+    holdT=setTimeout(function(){ reset(); }, HOLD_MS);
+  }
+  function holdEnd(e){
+    if(e){e.stopPropagation();}
+    clearTimeout(holdT);
+    holdfill.style.transition='width 140ms ease'; holdfill.style.width='0';
+  }
+  hold.addEventListener('pointerdown',holdBegin);
+  hold.addEventListener('pointerup',holdEnd);
+  hold.addEventListener('pointercancel',holdEnd);
+  hold.addEventListener('pointerleave',holdEnd);
+
+  /* ---------- the loop ----------
+     One second per pass while the screen is still black; only once the ramp has
+     actually started does it switch to per-frame animation. Overnight that is
+     one wakeup a second instead of sixty. */
+  function stopLoop(){
+    if(loopId==null) return;
+    if(loopIsRaf) cancelAnimationFrame(loopId); else clearTimeout(loopId);
+    loopId=null;
+  }
+  function schedule(smooth){
+    stopLoop(); loopIsRaf=smooth;
+    loopId = smooth ? requestAnimationFrame(tick) : setTimeout(tick,1000);
+  }
+  function tick(){
+    if(!wakeAt){ loopId=null; return; }
+    refreshWake();
+    var now=Date.now(), start=wakeAt-durMin*60000;
+    var p=paint((now-start)/(durMin*60000));
+    if(!fired&&$('useclock').checked){
+      drawSeg(new Date(now));
+      seg.style.opacity = p>0.45 ? Math.max(0,1-(p-0.45)/0.35).toFixed(2) : 1;
+    }
+    if(!fired&&now>=wakeAt) fire();
+    schedule(p>0 && !fired);
+  }
+
+  /* ---------- start / stop ---------- */
+  function begin(target,minutes,fast,clockLocked){
+    wakeAt=target; durMin=minutes; fired=false; fadeSec=fast?8:45;
+    byClock=clockLocked; lastSegMin=-1;
+    openAudio(); keepAwake();
+    setup.style.display='none'; night.style.display='flex';
+    seg.style.display=$('useclock').checked?'block':'none'; seg.style.opacity=1;
+    clearTimeout(fireT); clearInterval(backstop);
+    fireT=setTimeout(fire, Math.max(0,target-Date.now()));
+    backstop=setInterval(function(){
+      refreshWake();
+      if(wakeAt&&!fired&&Date.now()>=wakeAt) fire();
+    },1000);
+    flash(fast?4000:6000);
+    tick();
+  }
+
+  $('arm').addEventListener('click',function(){
+    goFullscreen();
+    var v=$('waketime').value.split(':');
+    wakeHH=+v[0]; wakeMM=+v[1];
+    var t=nextWake();
+    save(); setBackupAlarm(t);
+    begin(t,durMin,false,true);
+  });
+  $('test').addEventListener('click',function(){
+    goFullscreen();
+    var n=Math.max(1,Math.min(60,parseInt($('testmin').value,10)||1));
+    save();
+    begin(new Date(Date.now()+n*60000),n,n<=3,false);
+  });
+
+  night.addEventListener('click',function(){
+    if(!document.fullscreenElement&&!document.webkitFullscreenElement) goFullscreen();
+    flash(5000);
+  });
+
+  function reset(){
+    stopLoop(); clearTimeout(fireT); clearTimeout(autoOff); clearTimeout(holdT);
+    clearInterval(backstop); backstop=null;
+    stopRinging(); releaseAwake();
+    wakeAt=null; fired=false; byClock=true; lastSegMin=-1;
+    holdfill.style.transition='none'; holdfill.style.width='0';
+    status.classList.remove('show'); status.style.pointerEvents='none';
+    sky.style.background='#000'; seg.style.display='none';
+    ring.style.display='none';
+    night.style.display='none'; setup.style.display='flex';
+  }
+  cancel.addEventListener('click',function(e){e.stopPropagation(); reset();});
+})();
+</script></body></html>
