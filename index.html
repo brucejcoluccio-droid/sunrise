@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <title>Sunrise</title>
 <style>
-  :root{--ink:#c08a4a;--ink-faint:#6b4a28;--ink-bright:#e8b87a;--rule:#2a1c0e}
+  :root{--ink:#c08a4a;--ink-faint:#6b4a28;--ink-bright:#e8b87a;--rule:#2a1c0e;--seg:#8c1400}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;background:#000;overflow:hidden;overscroll-behavior:none}
   body{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
@@ -17,7 +17,7 @@
 
   .layer{position:fixed;inset:0;display:flex;flex-direction:column}
   #sky{background:#000;z-index:0}
-  #setup{z-index:4;padding:26px 24px calc(24px + env(safe-area-inset-bottom));overflow-y:auto;background:#000}
+  #setup{z-index:4;padding:26px 24px calc(28px + env(safe-area-inset-bottom));overflow-y:auto;background:#000}
   #night{z-index:2;background:transparent;display:none;align-items:center;justify-content:center}
   #status{z-index:5;position:fixed;inset:0;display:flex;flex-direction:column;
           align-items:center;justify-content:center;gap:14px;opacity:0;pointer-events:none;
@@ -26,21 +26,23 @@
 
   h1{font-size:34px;font-weight:400;margin:6px 0 4px;color:var(--ink-bright)}
   .sub{font-size:15px;line-height:1.5;color:var(--ink-faint);margin:0 0 26px;max-width:34ch}
+  hr{border:0;border-top:1px solid var(--rule);margin:26px 0 22px}
   .field{margin-bottom:22px}
   .field > span{display:block;font-size:14px;color:var(--ink-faint);margin-bottom:8px}
   input[type=time]{font-family:inherit;font-size:44px;color:var(--ink-bright);background:#000;
                    border:0;border-bottom:1px solid var(--rule);padding:2px 0 8px;width:100%}
   input[type=time]::-webkit-calendar-picker-indicator{filter:invert(.55) sepia(1) saturate(3) hue-rotate(-10deg)}
   .choices{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
-  .chip{font-family:inherit;font-size:17px;color:var(--ink);background:#000;
-        border:1px solid var(--rule);border-radius:2px;padding:11px 16px;min-width:60px}
+  .chip{font-family:inherit;font-size:16px;color:var(--ink);background:#000;
+        border:1px solid var(--rule);border-radius:2px;padding:11px 15px;min-width:56px}
   .chip[aria-pressed="true"]{color:#000;background:var(--ink-bright);border-color:var(--ink-bright)}
   .chip:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--ink-bright);outline-offset:2px}
   .custom{display:flex;align-items:center;gap:9px}
   input[type=number]{font-family:inherit;font-size:17px;color:var(--ink-bright);background:#000;
                      border:1px solid var(--rule);border-radius:2px;padding:11px 8px;width:76px;text-align:center}
   .unit{font-size:15px;color:var(--ink-faint)}
-  .toggles{display:flex;flex-direction:column;gap:13px;margin-bottom:26px}
+  input[type=range]{width:100%;accent-color:#c08a4a;background:transparent}
+  .toggles{display:flex;flex-direction:column;gap:13px;margin-bottom:24px}
   label.row{display:flex;align-items:center;gap:12px;font-size:16px;line-height:1.35}
   input[type=checkbox]{width:22px;height:22px;flex:0 0 auto;accent-color:#c08a4a}
   #arm{font-family:inherit;font-size:20px;width:100%;padding:18px;
@@ -50,6 +52,11 @@
         color:var(--ink);border:1px solid var(--rule);border-radius:2px}
   #testmin{width:88px}
   .note{font-size:13px;line-height:1.55;color:var(--ink-faint);margin-top:18px;max-width:40ch}
+  .prev{font-family:inherit;font-size:14px;color:var(--ink-faint);background:#000;
+        border:1px solid var(--rule);border-radius:2px;padding:9px 15px;margin-top:10px}
+  .prev[aria-pressed="true"]{color:#000;background:var(--ink);border-color:var(--ink)}
+  .filename{font-size:13px;color:var(--ink-faint);margin-top:9px;word-break:break-all}
+  input[type=file]{display:none}
 
   .until{font-size:17px;color:var(--ink)}
   .tiny{font-size:13.5px;color:var(--ink-faint);line-height:1.5}
@@ -57,9 +64,9 @@
   @keyframes beat{0%,100%{opacity:.25}50%{opacity:1}}
   @media (prefers-reduced-motion:reduce){.pulse{animation:none;opacity:.7}}
 
-  #seg{position:fixed;z-index:3;left:50%;top:50%;width:74vw;max-width:420px;
-       pointer-events:none;transform:translate(-50%,-50%)}
-  .on{fill:#4a0000}.off{fill:#0b0000}.colon{fill:#4a0000}
+  #seg{position:fixed;z-index:3;left:50%;top:50%;pointer-events:none;
+       transform-origin:center center}
+  .on{fill:var(--seg)}.off{fill:none}.colon{fill:var(--seg)}
 
   #ring{position:fixed;z-index:6;left:0;right:0;bottom:6vh;display:none;
         flex-direction:column;align-items:center;gap:14px}
@@ -101,11 +108,95 @@
     </div>
   </div>
 
+  <hr>
+
+  <div class="field">
+    <span>Alarm sound</span>
+    <div class="choices" id="alarmsounds">
+      <button class="chip" data-s="chime" aria-pressed="true">Chime</button>
+      <button class="chip" data-s="bells">Bells</button>
+      <button class="chip" data-s="beeps">Beeps</button>
+      <button class="chip" data-s="birds">Birds</button>
+      <button class="chip" data-s="custom">My file</button>
+    </div>
+    <button class="prev" id="prevalarm">Preview</button>
+    <input type="file" id="audiofile" accept="audio/*">
+    <button class="prev" id="pickfile" style="margin-left:8px">Choose audio file…</button>
+    <div class="filename" id="fname"></div>
+  </div>
+
+  <div class="field">
+    <span>Alarm rings for</span>
+    <div class="choices" id="ringfor">
+      <button class="chip" data-m="5" aria-pressed="true">5</button>
+      <button class="chip" data-m="10">10</button>
+      <button class="chip" data-m="15">15</button>
+      <span class="unit">min, or until stopped</span>
+    </div>
+  </div>
+
+  <hr>
+
+  <div class="field">
+    <span>Sleep sound</span>
+    <div class="choices" id="sleepsounds">
+      <button class="chip" data-s="off" aria-pressed="true">Off</button>
+      <button class="chip" data-s="brown">Brown</button>
+      <button class="chip" data-s="rain">Rain</button>
+      <button class="chip" data-s="fire">Fire</button>
+      <button class="chip" data-s="fan">Fan</button>
+    </div>
+    <button class="prev" id="prevsleep">Preview</button>
+  </div>
+
+  <div class="field">
+    <span>Sleep sound volume</span>
+    <input type="range" id="sleepvol" min="0" max="100" value="45">
+  </div>
+
+  <div class="field">
+    <span>Sleep sound runs for</span>
+    <div class="choices" id="sleepfor">
+      <button class="chip" data-m="30">30</button>
+      <button class="chip" data-m="60" aria-pressed="true">60</button>
+      <button class="chip" data-m="90">90</button>
+      <button class="chip" data-m="0">All night</button>
+      <span class="unit">min</span>
+    </div>
+  </div>
+
+  <hr>
+
+  <div class="field">
+    <span>Clock brightness</span>
+    <div class="choices" id="segbright">
+      <button class="chip" data-b="1">Dim</button>
+      <button class="chip" data-b="2" aria-pressed="true">Medium</button>
+      <button class="chip" data-b="3">Bright</button>
+    </div>
+  </div>
+
+  <div class="field">
+    <span>Clock orientation</span>
+    <div class="choices" id="segrot">
+      <button class="chip" data-r="auto" aria-pressed="true">Auto</button>
+      <button class="chip" data-r="0">Upright</button>
+      <button class="chip" data-r="90">Sideways</button>
+    </div>
+  </div>
+
   <div class="toggles">
-    <label class="row"><input type="checkbox" id="useclock" checked> Show the clock overnight in deep red</label>
-    <label class="row"><input type="checkbox" id="usesound" checked> Sound at wake time</label>
+    <label class="row"><input type="checkbox" id="useclock" checked> Show the clock overnight</label>
     <label class="row"><input type="checkbox" id="usevibe" checked> Vibrate at wake time</label>
-    <label class="row"><input type="checkbox" id="usealarm"> Backup alarm in the Clock app, 2 min later</label>
+  </div>
+
+  <div class="field">
+    <span>System Clock alarm (uses the alarm volume, not media)</span>
+    <div class="choices" id="backup">
+      <button class="chip" data-b="same" aria-pressed="true">Same time</button>
+      <button class="chip" data-b="2">2 min later</button>
+      <button class="chip" data-b="off">Off</button>
+    </div>
   </div>
 
   <button id="arm">Set the alarm</button>
@@ -114,6 +205,7 @@
     <input type="number" id="testmin" min="1" max="60" step="1" value="1" aria-label="test length in minutes">
     <span class="unit" style="align-self:center">min</span>
   </div>
+  <p class="note">The in-app sounds play on the <b>media</b> volume, which a web page cannot change or read. Leave the system Clock alarm on — it plays on the alarm volume and rings even if media is muted.</p>
   <p class="note" id="installnote">Tap the screen any time for the readout. It reports the screen lock and the audio state, so a silent alarm tells you which of the two failed.</p>
 </div>
 
@@ -130,7 +222,6 @@
   <button id="snooze">Snooze 9 min</button>
   <button id="hold"><div id="holdfill"></div><span>Hold to stop</span></button>
 </div>
-
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
@@ -143,25 +234,72 @@ if('serviceWorker' in navigator){
       ring=$('ring'), hold=$('hold'), holdfill=$('holdfill'), snooze=$('snooze'),
       cancel=$('cancel'), vid=$('nosleep'), seg=$('seg');
 
-  var HOLD_MS=800, MAX_RING_MS=15*60*1000, SNOOZE_MS=9*60*1000;
+  var HOLD_MS=800, SNOOZE_MS=9*60*1000;
 
   var durMin=30, wakeAt=null, wakeHH=6, wakeMM=30, byClock=true;
+  var alarmSound='chime', sleepSound='off', ringMin=5, sleepMin=60, sleepVol=0.45;
+  var segBright=2, segRot='auto', backupMode='same';
+  var SEGCOLOR={1:'#4a0000',2:'#8c1400',3:'#d42400'};
   var loopId=null, loopIsRaf=false, hideT=null, beat=null, fireT=null,
-      backstop=null, vguard=null, autoOff=null, holdT=null, holdStart=0;
+      backstop=null, vguard=null, autoOff=null, holdT=null, sleepFadeT=null;
   var lock=null, lockHow='none', audio=null, live=[], fired=false, fadeSec=45,
       audioNote='', lastSegMin=-1;
+  var noiseNode=null, noiseGain=null, noiseFilter=null, noiseLFO=null;
+  var customBlob=null, customName='', customEl=null, previewing=null;
+
+  /* ---------- custom audio persistence ----------
+     A File cannot go in localStorage, so the chosen track lives in IndexedDB
+     and survives closing the app. */
+  function idb(){
+    return new Promise(function(res,rej){
+      var r=indexedDB.open('sunrise',1);
+      r.onupgradeneeded=function(){ r.result.createObjectStore('files'); };
+      r.onsuccess=function(){res(r.result);}; r.onerror=function(){rej(r.error);};
+    });
+  }
+  function putFile(blob,name){
+    return idb().then(function(db){
+      return new Promise(function(res,rej){
+        var tx=db.transaction('files','readwrite').objectStore('files');
+        tx.put({blob:blob,name:name},'alarm');
+        tx.transaction.oncomplete=function(){res();};
+        tx.transaction.onerror=function(){rej();};
+      });
+    });
+  }
+  function getFile(){
+    return idb().then(function(db){
+      return new Promise(function(res){
+        var rq=db.transaction('files','readonly').objectStore('files').get('alarm');
+        rq.onsuccess=function(){res(rq.result||null);};
+        rq.onerror=function(){res(null);};
+      });
+    }).catch(function(){return null;});
+  }
 
   /* ---------- settings ---------- */
   function save(){try{localStorage.setItem('sunrise',JSON.stringify({
-    t:$('waketime').value,d:durMin,c:$('useclock').checked,s:$('usesound').checked,
-    v:$('usevibe').checked,a:$('usealarm').checked,tm:$('testmin').value}));}catch(e){}}
+    t:$('waketime').value,d:durMin,c:$('useclock').checked,
+    v:$('usevibe').checked,tm:$('testmin').value,
+    as:alarmSound,ss:sleepSound,rm:ringMin,sm:sleepMin,sv:sleepVol,
+    sb:segBright,sr:segRot,bu:backupMode}));}catch(e){}}
   function load(){try{
     var o=JSON.parse(localStorage.getItem('sunrise')||'null'); if(!o) return;
     $('waketime').value=o.t; durMin=o.d;
-    $('useclock').checked=o.c!==false; $('usesound').checked=o.s!==false;
-    $('usevibe').checked=o.v!==false; $('usealarm').checked=!!o.a;
+    $('useclock').checked=o.c!==false;
+    $('usevibe').checked=o.v!==false;
     if(o.tm) $('testmin').value=o.tm;
+    if(o.as) alarmSound=o.as; if(o.ss) sleepSound=o.ss;
+    if(o.rm) ringMin=o.rm; if(typeof o.sm==='number') sleepMin=o.sm;
+    if(typeof o.sv==='number') sleepVol=o.sv;
+    if(o.sb) segBright=o.sb; if(o.sr) segRot=o.sr; if(o.bu) backupMode=o.bu;
   }catch(e){}}
+
+  function pressGroup(id,val,attr){
+    [].forEach.call(document.querySelectorAll('#'+id+' .chip'),function(b){
+      b.setAttribute('aria-pressed', b.dataset[attr]===String(val) ? 'true':'false');
+    });
+  }
   function syncDurUI(){
     var matched=false;
     [].forEach.call(document.querySelectorAll('#durs .chip'),function(b){
@@ -170,10 +308,58 @@ if('serviceWorker' in navigator){
     });
     $('durcustom').value = matched ? '' : durMin;
   }
-  load(); syncDurUI();
+  function syncAll(){
+    syncDurUI();
+    pressGroup('alarmsounds',alarmSound,'s');
+    pressGroup('sleepsounds',sleepSound,'s');
+    pressGroup('ringfor',ringMin,'m');
+    pressGroup('sleepfor',sleepMin,'m');
+    pressGroup('segbright',segBright,'b');
+    pressGroup('segrot',segRot,'r');
+    pressGroup('backup',backupMode,'b');
+    $('sleepvol').value=Math.round(sleepVol*100);
+    applySeg();
+  }
 
-  /* Standalone means it was installed to the home screen and launched without
-     browser chrome. Until then, say so, because that is the whole point here. */
+  /* The SVG is 3:1. Size the long axis to the screen dimension it actually
+     spans, which depends on whether it is turned on its side.
+
+     "Auto" has to cope with rotation lock being off on the phone. If the page
+     itself is already landscape, the system rotated for us and the clock is
+     upright. If the page is still portrait we cannot tell from the viewport
+     whether the phone is flat or lying on its side with auto-rotate disabled,
+     so we read the physical tilt from the motion sensors instead. */
+  var physSideways=false;
+  window.addEventListener('deviceorientation',function(ev){
+    if(ev.gamma==null) return;
+    var side=Math.abs(ev.gamma)>45;
+    if(side!==physSideways){ physSideways=side; if(segRot==='auto') applySeg(); }
+  });
+
+  function applySeg(){
+    document.documentElement.style.setProperty('--seg',SEGCOLOR[segBright]||SEGCOLOR[2]);
+    var vw=window.innerWidth, vh=window.innerHeight, pageLandscape=(vw>=vh);
+    var rot;
+    if(segRot==='auto') rot = pageLandscape ? 0 : (physSideways ? 90 : 0);
+    else rot = +segRot;
+
+    var long  = rot===90 ? vh : vw;    /* screen axis the digits run along */
+    var cross = rot===90 ? vw : vh;    /* axis their height has to fit in  */
+    var w = Math.min(long*0.94, cross*0.94*3);
+    seg.style.width = w+'px';
+    seg.style.height = (w/3)+'px';
+    seg.style.marginLeft='0'; seg.style.marginTop='0';
+    seg.dataset.rot = rot;
+    seg.style.transform = 'translate(-50%,-50%) rotate('+rot+'deg)';
+  }
+  window.addEventListener('resize',applySeg);
+  window.addEventListener('orientationchange',function(){setTimeout(applySeg,250);});
+  load(); syncAll();
+  getFile().then(function(f){
+    if(f){ customBlob=f.blob; customName=f.name; $('fname').textContent='Using: '+f.name; }
+    else if(alarmSound==='custom'){ alarmSound='chime'; syncAll(); }
+  });
+
   (function(){
     var standalone = window.matchMedia('(display-mode: standalone)').matches ||
                      window.navigator.standalone === true;
@@ -195,18 +381,245 @@ if('serviceWorker' in navigator){
     if(v>0&&v<=180){durMin=v;
       [].forEach.call(document.querySelectorAll('#durs .chip'),function(b){b.setAttribute('aria-pressed','false');});}
   });
+  $('alarmsounds').addEventListener('click',function(e){
+    var b=e.target.closest('.chip'); if(!b) return;
+    if(b.dataset.s==='custom'&&!customBlob){ $('audiofile').click(); return; }
+    alarmSound=b.dataset.s; pressGroup('alarmsounds',alarmSound,'s'); save();
+  });
+  $('sleepsounds').addEventListener('click',function(e){
+    var b=e.target.closest('.chip'); if(!b) return;
+    sleepSound=b.dataset.s; pressGroup('sleepsounds',sleepSound,'s'); save();
+    if(previewing==='sleep'){ stopPreview(); if(sleepSound!=='off') doPreview('sleep'); }
+  });
+  $('ringfor').addEventListener('click',function(e){
+    var b=e.target.closest('.chip'); if(!b) return;
+    ringMin=+b.dataset.m; pressGroup('ringfor',ringMin,'m'); save();
+  });
+  $('sleepfor').addEventListener('click',function(e){
+    var b=e.target.closest('.chip'); if(!b) return;
+    sleepMin=+b.dataset.m; pressGroup('sleepfor',sleepMin,'m'); save();
+  });
+  $('segbright').addEventListener('click',function(e){
+    var b=e.target.closest('.chip'); if(!b) return;
+    segBright=+b.dataset.b; pressGroup('segbright',segBright,'b'); applySeg(); save();
+  });
+  $('segrot').addEventListener('click',function(e){
+    var b=e.target.closest('.chip'); if(!b) return;
+    segRot=b.dataset.r; pressGroup('segrot',segRot,'r'); applySeg(); save();
+  });
+  $('backup').addEventListener('click',function(e){
+    var b=e.target.closest('.chip'); if(!b) return;
+    backupMode=b.dataset.b; pressGroup('backup',backupMode,'b'); save();
+  });
+  $('sleepvol').addEventListener('input',function(){
+    sleepVol=this.value/100;
+    if(noiseGain&&audio) noiseGain.gain.setTargetAtTime(sleepVol,audio.currentTime,0.05);
+  });
+  $('sleepvol').addEventListener('change',save);
+  $('pickfile').addEventListener('click',function(){ $('audiofile').click(); });
+  $('audiofile').addEventListener('change',function(){
+    var f=this.files&&this.files[0]; if(!f) return;
+    customBlob=f; customName=f.name;
+    $('fname').textContent='Using: '+f.name;
+    alarmSound='custom'; pressGroup('alarmsounds',alarmSound,'s'); save();
+    putFile(f,f.name).catch(function(){
+      $('fname').textContent='Using: '+f.name+' (could not be saved for next time)';
+    });
+  });
 
-  /* ---------- wake time ----------
-     Re-derived from the wall clock on every pass rather than frozen at arming
-     time, so a time-zone change or a DST shift overnight moves the alarm with
-     the clock instead of firing an hour out. The two-hour grace window stops it
-     jumping to tomorrow the moment it fires. */
-  function nextWake(){
-    var t=new Date(); t.setHours(wakeHH,wakeMM,0,0);
-    if(t.getTime()-Date.now() < -2*3600*1000) t.setDate(t.getDate()+1);
-    return t;
+  /* ---------- audio ---------- */
+  function openAudio(){
+    if(audio) { try{audio.resume()}catch(e){} return; }
+    try{
+      audio=new (window.AudioContext||window.webkitAudioContext)();
+      var b=audio.createBuffer(1,1,22050), s=audio.createBufferSource();
+      s.buffer=b; s.connect(audio.destination); s.start(0); audio.resume();
+    }catch(e){ audioNote='audio unavailable'; }
   }
-  function refreshWake(){ if(byClock&&!fired) wakeAt=nextWake(); }
+
+  /* ---------- sleep sounds ----------
+     Generated sample by sample rather than looping a clip, so there is no
+     repeat for the ear to latch onto. Brown noise is white noise run through a
+     leaky integrator: each sample is mostly the previous one, which tilts the
+     spectrum down at 6 dB per octave and loses the hiss. Rain and fire add
+     random transients on top of that bed; the fan modulates it slowly. */
+  function buildNoise(mode){
+    stopNoise();
+    if(!audio||mode==='off') return;
+    var sr=audio.sampleRate;
+    var last=0, b0=0,b1=0,b2=0;
+    var drops=[], crackles=[], phase=0;
+
+    noiseNode=audio.createScriptProcessor(4096,1,1);
+    noiseNode.onaudioprocess=function(ev){
+      var out=ev.outputBuffer.getChannelData(0);
+      for(var i=0;i<out.length;i++){
+        var w=Math.random()*2-1, v;
+
+        /* brown: leaky integration of white */
+        last=(last+0.022*w)/1.022; v=last*3.4;
+
+        if(mode==='rain'){
+          /* a softer bed plus sparse droplet transients at varied pitch */
+          b0=0.99*b0+w*0.06; v=v*0.55+b0*0.9;
+          if(Math.random()<0.0016) drops.push({e:1,f:1200+Math.random()*2600,p:0});
+          for(var d=drops.length-1;d>=0;d--){
+            var o=drops[d];
+            o.p+=o.f/sr*6.283; o.e*=0.9965;
+            v+=Math.sin(o.p)*o.e*0.055;
+            if(o.e<0.004) drops.splice(d,1);
+          }
+        } else if(mode==='fire'){
+          /* low rumble, with short bright crackles at irregular intervals */
+          v*=0.75;
+          if(Math.random()<0.0012) crackles.push({e:0.6+Math.random()*0.7,d:0.986+Math.random()*0.009});
+          for(var c=crackles.length-1;c>=0;c--){
+            var k=crackles[c];
+            k.e*=k.d;
+            v+=(Math.random()*2-1)*k.e*0.20;
+            if(k.e<0.01) crackles.splice(c,1);
+          }
+        } else if(mode==='fan'){
+          /* heavier smoothing for the air rush, a slow wobble, and a low hum */
+          b1=0.982*b1+0.018*v; v=b1*2.3;
+          phase+=6.283*0.75/sr;
+          v*=(0.86+0.14*Math.sin(phase));
+          b2+=6.283*112/sr; if(b2>6.283) b2-=6.283;
+          v+=Math.sin(b2)*0.035;
+        }
+        out[i]=Math.max(-1,Math.min(1,v));
+      }
+    };
+
+    noiseFilter=audio.createBiquadFilter();
+    noiseFilter.type='lowpass';
+    noiseFilter.frequency.value = mode==='rain'?5200 : mode==='fire'?2600 : mode==='fan'?900 : 1700;
+
+    noiseGain=audio.createGain();
+    noiseGain.gain.setValueAtTime(0.0001,audio.currentTime);
+    noiseGain.gain.exponentialRampToValueAtTime(Math.max(0.001,sleepVol),audio.currentTime+4);
+
+    noiseNode.connect(noiseFilter); noiseFilter.connect(noiseGain);
+    noiseGain.connect(audio.destination);
+  }
+  function stopNoise(fadeS){
+    clearTimeout(sleepFadeT); sleepFadeT=null;
+    if(!noiseNode) return;
+    var n=noiseNode, g=noiseGain, f=noiseFilter;
+    noiseNode=null; noiseGain=null; noiseFilter=null;
+    function kill(){ try{n.disconnect();f.disconnect();g.disconnect();n.onaudioprocess=null;}catch(e){} }
+    if(fadeS&&audio&&g){
+      try{
+        g.gain.cancelScheduledValues(audio.currentTime);
+        g.gain.setValueAtTime(Math.max(0.001,g.gain.value),audio.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.0001,audio.currentTime+fadeS);
+      }catch(e){}
+      setTimeout(kill,fadeS*1000+200);
+    } else kill();
+  }
+  function startSleepSound(){
+    if(sleepSound==='off'||!audio) return;
+    buildNoise(sleepSound);
+    if(sleepMin>0){
+      sleepFadeT=setTimeout(function(){ stopNoise(30); }, sleepMin*60000);
+    }
+  }
+
+  /* ---------- alarm voices ---------- */
+  var VOICE={
+    chime:  {f:[392,588,784], g:[0.70,0.35,0.18], type:'sine',     dur:1.3, gap:2000},
+    bells:  {f:[523,1046,1568],g:[0.60,0.28,0.10], type:'sine',    dur:2.6, gap:3200},
+    beeps:  {f:[880],          g:[1.0],           type:'square',  dur:0.16, gap:700},
+    birds:  {f:[2100,2800],    g:[0.5,0.3],       type:'sine',    dur:0.5, gap:1400}
+  };
+  function pulseTone(level,name){
+    if(!audio) return;
+    var V=VOICE[name]||VOICE.chime;
+    try{
+      var t=audio.currentTime, g=audio.createGain();
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(level,t+(name==='beeps'?0.01:0.09));
+      g.gain.exponentialRampToValueAtTime(0.0001,t+V.dur);
+      g.connect(audio.destination);
+      V.f.forEach(function(f,i){
+        var o=audio.createOscillator(), og=audio.createGain();
+        o.type=V.type; o.frequency.value=f; og.gain.value=V.g[i];
+        /* birds get a quick upward sweep so they read as a chirp */
+        if(name==='birds'){ o.frequency.setValueAtTime(f*0.8,t);
+                            o.frequency.exponentialRampToValueAtTime(f*1.25,t+0.22); }
+        o.connect(og); og.connect(g); o.start(t); o.stop(t+V.dur+0.05);
+        live.push(o);
+        o.onended=function(){
+          try{o.disconnect(); og.disconnect();}catch(e){}
+          var k=live.indexOf(o); if(k>-1) live.splice(k,1);
+        };
+      });
+    }catch(e){}
+  }
+  function startRinging(){
+    if(audio&&audio.state==='suspended'){try{audio.resume()}catch(e){}}
+    audioNote = audio ? ('audio '+audio.state) : 'audio unavailable';
+
+    if(alarmSound==='custom'&&customBlob){
+      /* Loops the chosen track, fading up over the same window as the tones. */
+      try{
+        customEl=new Audio(URL.createObjectURL(customBlob));
+        customEl.loop=true; customEl.volume=0.15;
+        customEl.play().catch(function(){ audioNote='file blocked, falling back'; runTones(); });
+        var t0=Date.now();
+        beat=setInterval(function(){
+          var el=(Date.now()-t0)/1000;
+          if(customEl) customEl.volume=Math.min(1,0.15+0.85*Math.min(1,el/fadeSec));
+        },500);
+      }catch(e){ runTones(); }
+      return;
+    }
+    runTones();
+  }
+  function runTones(){
+    var name=(alarmSound==='custom')?'chime':alarmSound;
+    var V=VOICE[name]||VOICE.chime, t0=Date.now();
+    function r(){ pulseTone(Math.min(0.30,0.06+0.24*Math.min(1,(Date.now()-t0)/1000/fadeSec)),name); }
+    r(); clearInterval(beat); beat=setInterval(r,V.gap);
+  }
+  function stopRinging(){
+    clearInterval(beat); beat=null;
+    live.forEach(function(o){try{o.stop();o.disconnect()}catch(e){}}); live=[];
+    if(customEl){ try{customEl.pause(); URL.revokeObjectURL(customEl.src);}catch(e){} customEl=null; }
+    clearInterval(vguard); vguard=null;
+    try{navigator.vibrate&&navigator.vibrate(0);}catch(e){}
+  }
+
+  /* ---------- previews ---------- */
+  function stopPreview(){
+    if(!previewing) return;
+    if(previewing==='alarm'){ stopRinging(); }
+    else { stopNoise(0.4); }
+    previewing=null;
+    $('prevalarm').setAttribute('aria-pressed','false');
+    $('prevsleep').setAttribute('aria-pressed','false');
+  }
+  function doPreview(which){
+    openAudio();
+    previewing=which;
+    if(which==='alarm'){
+      fadeSec=2; startRinging();
+      $('prevalarm').setAttribute('aria-pressed','true');
+      setTimeout(function(){ if(previewing==='alarm') stopPreview(); },9000);
+    } else {
+      buildNoise(sleepSound);
+      $('prevsleep').setAttribute('aria-pressed','true');
+    }
+  }
+  $('prevalarm').addEventListener('click',function(){
+    if(previewing==='alarm'){ stopPreview(); return; }
+    stopPreview(); doPreview('alarm');
+  });
+  $('prevsleep').addEventListener('click',function(){
+    if(previewing==='sleep'){ stopPreview(); return; }
+    if(sleepSound==='off') return;
+    stopPreview(); doPreview('sleep');
+  });
 
   /* ---------- screen lock ---------- */
   function startNoSleepVideo(){
@@ -239,65 +652,29 @@ if('serviceWorker' in navigator){
       if(!fired&&Date.now()>=wakeAt) fire();
     }
   });
-
   function goFullscreen(){
     var el=document.documentElement, fn=el.requestFullscreen||el.webkitRequestFullscreen;
     if(fn){try{var r=fn.call(el,{navigationUI:'hide'}); if(r&&r.catch) r.catch(function(){});}
            catch(e){try{fn.call(el)}catch(e2){}}}
-    try{if(screen.orientation&&screen.orientation.lock)screen.orientation.lock('portrait').catch(function(){});}catch(e){}
   }
 
-  /* ---------- audio ---------- */
-  function openAudio(){
-    try{
-      audio=new (window.AudioContext||window.webkitAudioContext)();
-      var b=audio.createBuffer(1,1,22050), s=audio.createBufferSource();
-      s.buffer=b; s.connect(audio.destination); s.start(0); audio.resume();
-    }catch(e){ audioNote='audio unavailable'; }
+  /* ---------- wake time ----------
+     Two different questions, so two different rules. At arming, the next
+     occurrence must be strictly in the future, or setting 06:30 at 06:31
+     fires instantly. Afterwards, a two-hour grace keeps the target from
+     rolling to tomorrow the moment it fires, while still following the wall
+     clock across a time-zone change or a DST shift. */
+  function nextWake(strict){
+    var t=new Date(); t.setHours(wakeHH,wakeMM,0,0);
+    var slack = strict ? 0 : -2*3600*1000;
+    if(t.getTime()-Date.now() < slack) t.setDate(t.getDate()+1);
+    return t;
   }
-  /* Each oscillator drops itself from the live list when it ends, so an hour of
-     ringing does not accumulate thousands of dead nodes. */
-  function pulseTone(level){
-    if(!audio) return;
-    try{
-      var t=audio.currentTime, g=audio.createGain();
-      g.gain.setValueAtTime(0.0001,t);
-      g.gain.exponentialRampToValueAtTime(level,t+0.09);
-      g.gain.exponentialRampToValueAtTime(0.0001,t+1.15);
-      g.connect(audio.destination);
-      [392,588,784].forEach(function(f,i){
-        var o=audio.createOscillator(), og=audio.createGain();
-        o.type='sine'; o.frequency.value=f; og.gain.value=[0.7,0.35,0.18][i];
-        o.connect(og); og.connect(g); o.start(t); o.stop(t+1.3);
-        live.push(o);
-        o.onended=function(){
-          try{o.disconnect(); og.disconnect();}catch(e){}
-          var k=live.indexOf(o); if(k>-1) live.splice(k,1);
-        };
-      });
-    }catch(e){}
-  }
-  function startRinging(){
-    if(!$('usesound').checked) return;
-    if(audio&&audio.state==='suspended'){try{audio.resume()}catch(e){}}
-    audioNote = audio ? ('audio '+audio.state) : 'audio unavailable';
-    var t0=Date.now();
-    function r(){ pulseTone(Math.min(0.30, 0.06+0.24*Math.min(1,(Date.now()-t0)/1000/fadeSec))); }
-    r(); beat=setInterval(r,2000);
-  }
-  function stopRinging(){
-    clearInterval(beat); beat=null;
-    live.forEach(function(o){try{o.stop();o.disconnect()}catch(e){}}); live=[];
-    if(audio){try{audio.close()}catch(e){} audio=null;}
-    clearInterval(vguard); vguard=null;
-    try{navigator.vibrate&&navigator.vibrate(0);}catch(e){}
-  }
+  function refreshWake(){ if(byClock&&!fired) wakeAt=nextWake(false); }
 
-  /* Offset two minutes past the page alarm so it is a genuine backstop rather
-     than a duplicate going off at the same instant. */
   function setBackupAlarm(t){
-    if(!$('usealarm').checked) return;
-    var b=new Date(t.getTime()+2*60000);
+    if(backupMode==='off') return;
+    var b=new Date(t.getTime()+(backupMode==='2'?2*60000:0));
     var url='intent://#Intent;action=android.intent.action.SET_ALARM;'+
             'i.android.intent.extra.alarm.HOUR='+b.getHours()+';'+
             'i.android.intent.extra.alarm.MINUTES='+b.getMinutes()+';'+
@@ -323,7 +700,6 @@ if('serviceWorker' in navigator){
     out+='<circle class="colon" cx="150" cy="38" r="5.5"/><circle class="colon" cx="150" cy="66" r="5.5"/>';
     seg.innerHTML=out;
   })();
-  /* Only touches the DOM when the displayed minute actually changes. */
   function drawSeg(d){
     var mins=d.getHours()*60+d.getMinutes();
     if(mins===lastSegMin) return;
@@ -334,8 +710,9 @@ if('serviceWorker' in navigator){
       if(i===0&&lead) on=false;
       p.setAttribute('class',on?'on':'off');
     });
-    var n=Math.floor(Date.now()/60000)%4;   /* shift pixels to dodge burn-in */
-    seg.style.transform='translate(-50%,-50%) translate('+[0,3,0,-3][n]+'px,'+[-3,0,3,0][n]+'px)';
+    var n=Math.floor(Date.now()/60000)%4;
+    seg.style.transform='translate(-50%,-50%) rotate('+(seg.dataset.rot||0)+'deg) '+
+      'translate('+[0,3,0,-3][n]+'px,'+[-3,0,3,0][n]+'px)';
   }
 
   /* ---------- the light ---------- */
@@ -372,8 +749,9 @@ if('serviceWorker' in navigator){
   }
   function flash(ms){
     if(!wakeAt) return;
-    $('s_until').textContent = fired ? 'alarm firing' : untilText(wakeAt-Date.now());
-    $('s_wake').textContent='light begins '+durMin+' min earlier';
+    $('s_until').textContent = fired ? 'alarm ringing' : untilText(wakeAt-Date.now());
+    $('s_wake').textContent='light begins '+durMin+' min earlier'+
+      (sleepSound!=='off' ? ' \u00b7 '+sleepSound+' sound' : '');
     $('s_lock').textContent = lockHow==='wakelock' ? 'screen lock held'
       : lockHow==='video' ? 'screen held by video fallback' : 'screen lock NOT held';
     $('s_audio').textContent=(audio?('audio '+audio.state):(audioNote||'audio not opened'))+
@@ -389,6 +767,7 @@ if('serviceWorker' in navigator){
     if(fired||!wakeAt) return;
     fired=true;
     paint(1); seg.style.display='none';
+    stopNoise(3);                       /* sleep sound out before the alarm in */
     startRinging();
     if($('usevibe').checked&&navigator.vibrate){
       try{navigator.vibrate([500,700,500,700,500,700,500]);}catch(e){}
@@ -396,7 +775,7 @@ if('serviceWorker' in navigator){
     }
     ring.style.display='flex';
     clearTimeout(autoOff);
-    autoOff=setTimeout(function(){ if(fired) reset(); }, MAX_RING_MS);
+    autoOff=setTimeout(function(){ if(fired) reset(); }, ringMin*60000);
   }
 
   function doSnooze(){
@@ -405,24 +784,22 @@ if('serviceWorker' in navigator){
     ring.style.display='none';
     fired=false; byClock=false;
     wakeAt=new Date(Date.now()+SNOOZE_MS);
-    durMin=Math.max(1,Math.round(SNOOZE_MS/60000/3));   /* short re-ramp */
+    durMin=Math.max(1,Math.round(SNOOZE_MS/60000/3));
     lastSegMin=-1;
     seg.style.display=$('useclock').checked?'block':'none';
     seg.style.opacity=1;
     openAudio();
     clearTimeout(fireT);
-    fireT=setTimeout(fire, SNOOZE_MS);
+    fireT=setTimeout(fire,SNOOZE_MS);
     flash(3000);
   }
   snooze.addEventListener('click',function(e){e.stopPropagation(); doSnooze();});
 
-  /* Hold to stop, so rolling over onto the phone cannot kill the alarm. */
   function holdBegin(e){
     e.preventDefault(); e.stopPropagation();
-    holdStart=Date.now();
     holdfill.style.transition='width '+HOLD_MS+'ms linear';
     holdfill.style.width='100%';
-    holdT=setTimeout(function(){ reset(); }, HOLD_MS);
+    holdT=setTimeout(function(){ reset(); },HOLD_MS);
   }
   function holdEnd(e){
     if(e){e.stopPropagation();}
@@ -434,10 +811,7 @@ if('serviceWorker' in navigator){
   hold.addEventListener('pointercancel',holdEnd);
   hold.addEventListener('pointerleave',holdEnd);
 
-  /* ---------- the loop ----------
-     One second per pass while the screen is still black; only once the ramp has
-     actually started does it switch to per-frame animation. Overnight that is
-     one wakeup a second instead of sixty. */
+  /* ---------- the loop ---------- */
   function stopLoop(){
     if(loopId==null) return;
     if(loopIsRaf) cancelAnimationFrame(loopId); else clearTimeout(loopId);
@@ -462,13 +836,15 @@ if('serviceWorker' in navigator){
 
   /* ---------- start / stop ---------- */
   function begin(target,minutes,fast,clockLocked){
+    stopPreview();
     wakeAt=target; durMin=minutes; fired=false; fadeSec=fast?8:45;
     byClock=clockLocked; lastSegMin=-1;
     openAudio(); keepAwake();
+    startSleepSound();
     setup.style.display='none'; night.style.display='flex';
     seg.style.display=$('useclock').checked?'block':'none'; seg.style.opacity=1;
     clearTimeout(fireT); clearInterval(backstop);
-    fireT=setTimeout(fire, Math.max(0,target-Date.now()));
+    fireT=setTimeout(fire,Math.max(0,target-Date.now()));
     backstop=setInterval(function(){
       refreshWake();
       if(wakeAt&&!fired&&Date.now()>=wakeAt) fire();
@@ -481,7 +857,7 @@ if('serviceWorker' in navigator){
     goFullscreen();
     var v=$('waketime').value.split(':');
     wakeHH=+v[0]; wakeMM=+v[1];
-    var t=nextWake();
+    var t=nextWake(true);
     save(); setBackupAlarm(t);
     begin(t,durMin,false,true);
   });
@@ -500,7 +876,7 @@ if('serviceWorker' in navigator){
   function reset(){
     stopLoop(); clearTimeout(fireT); clearTimeout(autoOff); clearTimeout(holdT);
     clearInterval(backstop); backstop=null;
-    stopRinging(); releaseAwake();
+    stopRinging(); stopNoise(); releaseAwake();
     wakeAt=null; fired=false; byClock=true; lastSegMin=-1;
     holdfill.style.transition='none'; holdfill.style.width='0';
     status.classList.remove('show'); status.style.pointerEvents='none';
@@ -510,4 +886,6 @@ if('serviceWorker' in navigator){
   }
   cancel.addEventListener('click',function(e){e.stopPropagation(); reset();});
 })();
-</script></body></html>
+</script>
+</body>
+</html>
