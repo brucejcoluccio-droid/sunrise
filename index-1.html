@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Sunrise</title>
+<style>
+  :root{--ink:#c08a4a;--faint:#6b4a28;--bright:#e8b87a;--rule:#2a1c0e;--seg:#8c1400}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0}
+  html,body{height:100%;background:#000;overflow:hidden;overscroll-behavior:none}
+  body{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+       color:var(--ink);-webkit-font-smoothing:antialiased;touch-action:manipulation}
+
+  .layer{position:fixed;inset:0}
+  #sky{background:#000;z-index:0}
+  #night{z-index:2;display:none}
+  #setup{z-index:4;background:#000;overflow-y:auto;
+         padding:24px 22px calc(30px + env(safe-area-inset-bottom))}
+
+  h1{font-size:32px;font-weight:400;margin:4px 0 2px;color:var(--bright)}
+  .sub{font-size:14.5px;line-height:1.5;color:var(--faint);margin:0 0 20px}
+  h2{font-size:12px;font-weight:400;letter-spacing:.14em;color:var(--faint);
+     margin:26px 0 12px;text-transform:uppercase}
+  hr{border:0;border-top:1px solid var(--rule);margin:22px 0 0}
+  .field{margin-bottom:18px}
+  .field > span{display:block;font-size:14px;color:var(--faint);margin-bottom:8px}
+  .val{float:right;color:var(--bright)}
+  .choices{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .chip{font-family:inherit;font-size:15.5px;color:var(--ink);background:#000;
+        border:1px solid var(--rule);border-radius:2px;padding:10px 14px;min-width:52px}
+  .chip[aria-pressed="true"]{color:#000;background:var(--bright);border-color:var(--bright)}
+  .chip:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--bright);outline-offset:2px}
+  .sw{width:26px;height:26px;border-radius:50%;padding:0;min-width:0}
+  .sw[aria-pressed="true"]{outline:2px solid var(--bright);outline-offset:2px}
+  input[type=time]{font-family:inherit;font-size:40px;color:var(--bright);background:#000;
+                   border:0;border-bottom:1px solid var(--rule);padding:2px 0 8px;width:100%}
+  input[type=time]::-webkit-calendar-picker-indicator{filter:invert(.55) sepia(1) saturate(3) hue-rotate(-10deg)}
+  input[type=number]{font-family:inherit;font-size:16px;color:var(--bright);background:#000;
+                     border:1px solid var(--rule);border-radius:2px;padding:10px 6px;width:70px;text-align:center}
+  input[type=range]{width:100%;accent-color:#c08a4a}
+  .unit{font-size:14px;color:var(--faint)}
+  label.row{display:flex;align-items:center;gap:11px;font-size:15.5px;line-height:1.35;margin-bottom:12px}
+  input[type=checkbox]{width:21px;height:21px;flex:0 0 auto;accent-color:#c08a4a}
+
+  /* noise mixer */
+  .mix{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .mix .name{width:62px;font-size:14.5px;color:var(--ink);flex:0 0 auto}
+  .mix input{flex:1}
+  .mix .pct{width:38px;text-align:right;font-size:13px;color:var(--faint);flex:0 0 auto}
+  .mix.live .name{color:var(--bright)}
+
+  #go{font-family:inherit;font-size:19px;width:100%;padding:17px;margin-top:8px;
+      background:var(--bright);color:#000;border:0;border-radius:2px}
+  .ghost{font-family:inherit;font-size:15px;width:100%;padding:13px;margin-top:9px;
+         background:#000;color:var(--ink);border:1px solid var(--rule);border-radius:2px}
+  .note{font-size:12.5px;line-height:1.55;color:var(--faint);margin-top:14px}
+
+  /* night */
+  #clock{position:fixed;z-index:3;left:50%;top:50%;pointer-events:none;transform-origin:center center}
+  .on{fill:var(--seg)} .off{fill:none}
+  #overlay{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;
+           align-items:center;justify-content:center;gap:16px;text-align:center;padding:24px;
+           opacity:0;pointer-events:none;transition:opacity .6s ease}
+  #overlay.show{opacity:1;pointer-events:auto}
+  #overlay .big{font-size:18px;color:var(--ink)}
+  #overlay .tiny{font-size:13px;color:var(--faint);line-height:1.5}
+  #stop{font-family:inherit;font-size:16px;color:var(--ink);background:#000;
+        border:1px solid var(--rule);border-radius:2px;padding:12px 26px}
+  #nosleep{position:fixed;width:2px;height:2px;opacity:.01;left:0;top:0;pointer-events:none}
+</style>
+</head>
+<body>
+
+<div id="sky" class="layer"></div>
+<video id="nosleep" muted playsinline webkit-playsinline></video>
+<svg id="clock"></svg>
+<div id="night" class="layer"></div>
+<div id="overlay">
+  <div class="big" id="o_main"></div>
+  <div class="tiny" id="o_sub"></div>
+  <div class="tiny" id="o_diag"></div>
+  <button id="stop">Stop</button>
+</div>
+
+<div id="setup" class="layer">
+  <h1>Sunrise</h1>
+  <p class="sub">A nightstand clock, a dawn ramp, and a noise mixer. The alarm
+  itself is handed to your phone's Clock app, where it rings on the alarm volume.</p>
+
+  <div class="field">
+    <span>Mode</span>
+    <div class="choices" id="mode">
+      <button class="chip" data-m="clock">Clock only</button>
+      <button class="chip" data-m="sunrise" aria-pressed="true">Clock + sunrise</button>
+    </div>
+  </div>
+
+  <div id="sunblock">
+    <h2>Sunrise</h2>
+    <div class="field">
+      <span>Wake at</span>
+      <input type="time" id="waketime" value="06:30">
+    </div>
+    <div class="field">
+      <span>Light starts before</span>
+      <div class="choices" id="durs">
+        <button class="chip" data-min="15">15</button>
+        <button class="chip" data-min="30" aria-pressed="true">30</button>
+        <button class="chip" data-min="45">45</button>
+        <button class="chip" data-min="60">60</button>
+        <span class="choices"><input type="number" id="durcustom" min="1" max="180" step="1" placeholder="min"><span class="unit">min</span></span>
+      </div>
+    </div>
+    <div class="field">
+      <span>Ends on</span>
+      <div class="choices" id="endtone">
+        <button class="chip" data-e="cool" aria-pressed="true">Daylight</button>
+        <button class="chip" data-e="warm">Warm white</button>
+      </div>
+      <p class="note">Daylight carries the short wavelengths that actually promote
+      alertness. Warm white is gentler but does less.</p>
+    </div>
+    <div class="field">
+      <span>Clock app alarm</span>
+      <div class="choices" id="backup">
+        <button class="chip" data-b="same" aria-pressed="true">At wake time</button>
+        <button class="chip" data-b="2">2 min later</button>
+        <button class="chip" data-b="off">Don't set</button>
+      </div>
+      <p class="note">Set once in the Clock app which sound it uses; new alarms
+      inherit it. This page makes no sound of its own.</p>
+    </div>
+  </div>
+
+  <h2>Clock face</h2>
+  <div class="field">
+    <span>Brightness <span class="val" id="vBright"></span></span>
+    <input type="range" id="bright" min="0" max="100" step="1" value="35">
+    <p class="note">Logarithmic — most of the travel is in the very dim range, so
+    you can keep the phone's own brightness high for the sunrise and still have a
+    clock that doesn't light the room.</p>
+  </div>
+  <div class="field">
+    <div class="choices" id="fmt">
+      <button class="chip" data-f="24" aria-pressed="true">24 hour</button>
+      <button class="chip" data-f="12">12 hour</button>
+      <button class="chip" data-f="sec">Seconds</button>
+    </div>
+  </div>
+  <div class="field">
+    <span>Orientation</span>
+    <div class="choices" id="rot">
+      <button class="chip" data-r="auto" aria-pressed="true">Auto</button>
+      <button class="chip" data-r="0">Upright</button>
+      <button class="chip" data-r="90">Sideways</button>
+    </div>
+  </div>
+
+  <h2>Noise mixer</h2>
+  <div id="mixer"></div>
+  <div class="field" style="margin-top:16px">
+    <span>Tone <span class="val" id="vTone"></span></span>
+    <input type="range" id="tone" min="0" max="100" step="1" value="100">
+    <p class="note">A low-pass over the whole mix. Pull it down to strip the
+    hiss off any combination and leave the low end.</p>
+  </div>
+  <div class="field">
+    <span>Master <span class="val" id="vMaster"></span></span>
+    <input type="range" id="master" min="0" max="100" step="1" value="60">
+  </div>
+  <div class="field">
+    <span>Runs for</span>
+    <div class="choices" id="noisefor">
+      <button class="chip" data-m="30">30</button>
+      <button class="chip" data-m="60" aria-pressed="true">60</button>
+      <button class="chip" data-m="90">90</button>
+      <button class="chip" data-m="0">All night</button>
+      <span class="unit">min</span>
+    </div>
+  </div>
+  <button class="ghost" id="audition">Audition the mix</button>
+  <p class="note">Every layer is generated sample by sample rather than looping a
+  recording, so nothing ever repeats.</p>
+
+  <hr>
+  <button id="go">Start</button>
+  <p class="note" id="installnote">Tap the screen while running for the status readout.</p>
+</div>
+<script>
+if('serviceWorker' in navigator){
+  addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});
+}
+(function(){
+var $=function(i){return document.getElementById(i);};
+var sky=$('sky'), setup=$('setup'), night=$('night'), overlay=$('overlay'),
+    svg=$('clock'), vid=$('nosleep');
+
+/* ================= state ================= */
+var mode='sunrise', durMin=30, endTone='cool', backupMode='same';
+var wakeHH=6, wakeMM=30, wakeAt=null, byClock=true, running=false, arrived=false;
+var brightPos=35, hour12=false, showSec=false, rotMode='auto';
+var noiseFor=60, master=0.60;
+var LAYERS=[
+  {k:'deep',  n:'Deep',  v:0},
+  {k:'rumble',n:'Rumble',v:0},
+  {k:'brown', n:'Brown', v:0},
+  {k:'pink',  n:'Pink',  v:0},
+  {k:'rain',  n:'Rain',  v:0},
+  {k:'fire',  n:'Fire',  v:0},
+  {k:'fan',   n:'Fan',   v:0},
+  {k:'surf',  n:'Surf',  v:0},
+  {k:'stream',n:'Stream',v:0}
+];
+var tone=100;   /* master low-pass position, 0 = darkest */
+
+var loopId=null, loopRaf=false, hideT=null, fireT=null, backstop=null,
+    noiseOffT=null, lastKey='', lock=null, lockHow='none',
+    audio=null, proc=null, procGain=null, toneNode=null, physSideways=false, auditioning=false;
+
+/* ================= persistence ================= */
+function save(){try{
+  var lv={}; LAYERS.forEach(function(L){lv[L.k]=L.v;});
+  localStorage.setItem('sunrise2',JSON.stringify({
+    mode:mode,t:$('waketime').value,d:durMin,e:endTone,b:backupMode,
+    br:brightPos,h12:hour12,sec:showSec,rot:rotMode,
+    nf:noiseFor,ma:master,tn:tone,lv:lv}));
+}catch(e){}}
+function load(){try{
+  var o=JSON.parse(localStorage.getItem('sunrise2')||'null'); if(!o) return;
+  if(o.mode) mode=o.mode;
+  if(o.t) $('waketime').value=o.t;
+  if(o.d) durMin=o.d; if(o.e) endTone=o.e; if(o.b) backupMode=o.b;
+  if(typeof o.br==='number') brightPos=o.br;
+  hour12=!!o.h12; showSec=!!o.sec; if(o.rot) rotMode=o.rot;
+  if(typeof o.nf==='number') noiseFor=o.nf;
+  if(typeof o.ma==='number') master=o.ma;
+  if(typeof o.tn==='number') tone=o.tn;
+  if(o.lv) LAYERS.forEach(function(L){ if(typeof o.lv[L.k]==='number') L.v=o.lv[L.k]; });
+}catch(e){}}
+load();
+
+function press(id,val,attr){
+  [].forEach.call(document.querySelectorAll('#'+id+' .chip'),function(b){
+    b.setAttribute('aria-pressed', b.dataset[attr]===String(val)?'true':'false');
+  });
+}
+
+/* ================= clock face ================= */
+var SEG={a:'12,3 52,3 45,12 19,12',   b:'54,5 56,46 48,52 47,14',
+         c:'48,54 56,48 54,91 47,84', d:'19,86 45,86 52,95 12,95',
+         e:'8,48 16,54 17,84 8,91',   f:'10,5 18,14 17,52 8,46',
+         g:'18,44 46,44 52,49 46,54 18,54 12,49'};
+var DIGIT={'0':'abcdef','1':'bc','2':'abged','3':'abgcd','4':'fgbc',
+           '5':'afgcd','6':'afgecd','7':'abc','8':'abcdefg','9':'abcdfg'};
+var PITCH=68, COLON=32, SECSCALE=0.42;
+
+function layout(){
+  var base=PITCH*2+COLON+PITCH*2-8, x=0, html='', parts=[];
+  [0,1].forEach(function(i){parts.push({d:i,x:x}); x+=PITCH;});
+  var colonX=x+COLON/2-2; x+=COLON;
+  [2,3].forEach(function(i){parts.push({d:i,x:x}); x+=PITCH;});
+  var total=base, secX=0;
+  if(showSec){ secX=base+14; total=secX+(PITCH*2-8)*SECSCALE; }
+  parts.forEach(function(p){
+    html+='<g transform="translate('+p.x+',0)">';
+    for(var k in SEG) html+='<polygon class="off" data-i="'+p.d+'" data-s="'+k+'" points="'+SEG[k]+'"/>';
+    html+='</g>';
+  });
+  html+='<circle class="on" cx="'+colonX+'" cy="38" r="5.5"/>'+
+        '<circle class="on" cx="'+colonX+'" cy="66" r="5.5"/>';
+  if(showSec) [0,1].forEach(function(j){
+    html+='<g transform="translate('+(secX+j*PITCH*SECSCALE)+',56) scale('+SECSCALE+')">';
+    for(var k2 in SEG) html+='<polygon class="off" data-i="'+(4+j)+'" data-s="'+k2+'" points="'+SEG[k2]+'"/>';
+    html+='</g>';
+  });
+  svg.setAttribute('viewBox','0 0 '+total+' 100');
+  svg.dataset.ar=total/100;
+  svg.innerHTML=html;
+  lastKey=''; fit();
+}
+
+/* Lightness is exponential in the slider position: position 0 lands at 1%,
+   which on OLED is a handful of pixels barely lit, and position 100 at 45%.
+   A linear slider spends nearly all its travel in a range too bright to sleep
+   next to. */
+function lightness(){ return 1*Math.pow(45, brightPos/100); }
+/* Pure red only. hsl(0,100%,L) resolves to rgb(x,0,0): no green, no blue,
+   nothing in the band that suppresses melatonin. Other hues would all leak
+   some, so there is no reason to offer them on a bedside clock. */
+function colour(){
+  var L=lightness();
+  document.documentElement.style.setProperty('--seg','hsl(0,100%,'+L.toFixed(2)+'%)');
+  $('vBright').textContent=L.toFixed(1)+'%';
+}
+
+addEventListener('deviceorientation',function(ev){
+  if(ev.gamma==null) return;
+  var side=Math.abs(ev.gamma)>45;
+  if(side!==physSideways){ physSideways=side; if(rotMode==='auto') fit(); }
+});
+function fit(){
+  var vw=innerWidth, vh=innerHeight, ar=+svg.dataset.ar||3;
+  var rot = rotMode==='auto' ? ((vw>=vh)?0:(physSideways?90:0)) : +rotMode;
+  var along=rot===90?vh:vw, across=rot===90?vw:vh;
+  var w=Math.min(along*0.94, across*0.94*ar);
+  svg.style.width=w+'px'; svg.style.height=(w/ar)+'px';
+  svg.dataset.rot=rot; place();
+}
+function place(){
+  var n=Math.floor(Date.now()/120000)%4;
+  svg.style.transform='translate(-50%,-50%) rotate('+(svg.dataset.rot||0)+'deg) '+
+    'translate('+[0,4,0,-4][n]+'px,'+[-4,0,4,0][n]+'px)';
+}
+addEventListener('resize',fit);
+addEventListener('orientationchange',function(){setTimeout(fit,250);});
+
+function drawClock(d){
+  var h=d.getHours(), m=d.getMinutes(), s=d.getSeconds();
+  if(hour12){ h=h%12; if(h===0) h=12; }
+  var txt=('0'+h).slice(-2)+('0'+m).slice(-2)+('0'+s).slice(-2);
+  var key=txt.slice(0, showSec?6:4);
+  if(key===lastKey) return;
+  lastKey=key;
+  var lead=(txt[0]==='0');
+  [].forEach.call(svg.querySelectorAll('polygon'),function(p){
+    var i=+p.dataset.i, on=DIGIT[txt[i]].indexOf(p.dataset.s)>-1;
+    if(i===0&&lead) on=false;
+    p.setAttribute('class',on?'on':'off');
+  });
+  place();
+}
+
+/* ================= noise ================
+   One processor mixes every layer, each with its own gain, so several can run
+   at once. Nothing loops: each sample is computed fresh, which is the whole
+   reason to synthesise rather than play a recording — a recorded bed has a
+   seam, and once you hear the repeat you cannot stop hearing it. */
+/* Measured trims. Each generator lands at a different natural level, so
+   without these a slider at 50% means something different on every row and
+   the fan clips before it reaches the top. Normalised to ~0.13 RMS. */
+var TRIM={deep:8.48, rumble:6.20, brown:0.65, pink:0.70, rain:0.60,
+          fire:1.03, fan:0.39, surf:1.78, stream:1.04};
+
+function makeState(sr){
+  return {
+    sr:sr,
+    bn:0,                                   /* brown integrator */
+    dp1:0, dp2:0, dpPh:Math.random()*6.283,
+    rm1:0, rm2:0, rmPh:Math.random()*6.283,
+    p0:0,p1:0,p2:0,p3:0,p4:0,p5:0,p6:0,     /* pink filter bank */
+    rLo:0, rMid:0,
+    drops:[],
+    fireLo:0, fireHi:0, cracks:[],
+    fanLo:0, fanLo2:0, fanPh:0, fanBlade:0, fanWob:0,
+    surfLo:0, surfPh:Math.random()*6.283, surfHiss:0,
+    strLo:0, strHi:0, burbles:[]
+  };
+}
+function renderNoise(out, st, gains){
+  var sr=st.sr;
+  for(var i=0;i<out.length;i++){
+    var w=Math.random()*2-1, acc=0;
+
+    /* brown: leaky integration tilts white down 6 dB/octave */
+    st.bn=(st.bn+0.022*w)/1.022;
+    var brown=st.bn*3.4;
+    if(gains.brown) acc+=brown*gains.brown*TRIM.brown;
+
+    if(gains.deep){
+      /* Two integrators in series: a 12 dB/octave tilt that leaves almost
+         nothing above a hundred hertz. Chest rather than ears. */
+      st.dp1 += 0.0045*(w-st.dp1);
+      st.dp2 += 0.0045*(st.dp1-st.dp2);
+      st.dpPh += 6.283/(sr*17);
+      acc += st.dp2*(0.80+0.20*Math.sin(st.dpPh))*gains.deep*TRIM.deep;
+    }
+
+    if(gains.rumble){
+      /* Low band with a slow swell, like weather or traffic a long way off. */
+      st.rm1 += 0.011*(w-st.rm1);
+      st.rm2 += 0.011*(st.rm1-st.rm2);
+      st.rmPh += 6.283/(sr*23);
+      var sw=0.45+0.55*Math.pow(Math.sin(st.rmPh)*0.5+0.5,1.4);
+      acc += st.rm2*sw*gains.rumble*TRIM.rumble;
+    }
+
+    if(gains.pink){
+      /* Paul Kellet's filter bank: 3 dB/octave, the midpoint between white
+         and brown, and the closest of these to a hiss you can sleep through. */
+      st.p0=0.99886*st.p0+w*0.0555179; st.p1=0.99332*st.p1+w*0.0750759;
+      st.p2=0.96900*st.p2+w*0.1538520; st.p3=0.86650*st.p3+w*0.3104856;
+      st.p4=0.55000*st.p4+w*0.5329522; st.p5=-0.7616*st.p5-w*0.0168980;
+      var pk=(st.p0+st.p1+st.p2+st.p3+st.p4+st.p5+st.p6+w*0.5362)*0.11;
+      st.p6=w*0.115926;
+      acc+=pk*gains.pink*TRIM.pink;
+    }
+
+    if(gains.rain){
+      /* Rain is not pitched. The earlier version excited tuned resonators,
+         which is why it pinged. This is three unpitched parts instead: a
+         high hiss sheet, a mid body, and a dense spatter of very short noise
+         bursts — roughly 900 a second, each a few milliseconds, so they fuse
+         into texture rather than being heard as separate events. */
+      st.rLo  += 0.040*(w-st.rLo);          /* ~280 Hz corner */
+      st.rMid += 0.130*(w-st.rMid);         /* ~950 Hz corner */
+      var sheet = w - st.rLo;               /* high-passed hiss */
+      var v = sheet*0.15 + st.rMid*0.62 + brown*0.52;
+      if(Math.random()<0.021) st.drops.push({e:0.30+Math.random()*0.70,
+                                             d:0.9955+Math.random()*0.0025});
+      for(var d=st.drops.length-1;d>=0;d--){
+        var o=st.drops[d]; o.e*=o.d;
+        v += (Math.random()*2-1)*o.e*0.042;
+        if(o.e<0.012) st.drops.splice(d,1);
+      }
+      acc+=v*gains.rain*TRIM.rain;
+    }
+
+    if(gains.fire){
+      /* low rumble under bright, fast crackles; the crackle is highpassed
+         noise with a very short decay so it reads as a snap, not a hiss */
+      st.fireLo += 0.012*(w-st.fireLo);
+      var v2=st.fireLo*2.6;
+      if(Math.random()<0.0016) st.cracks.push({e:0.5+Math.random()*0.9,
+                                               d:0.9955+Math.random()*0.0035});
+      if(Math.random()<0.00012) st.cracks.push({e:1.6,d:0.9975});   /* occasional pop */
+      for(var c=st.cracks.length-1;c>=0;c--){
+        var k=st.cracks[c]; k.e*=k.d;
+        var n2=Math.random()*2-1;
+        st.fireHi = n2 - st.fireHi*0.10;
+        v2 += st.fireHi*k.e*0.16;
+        if(k.e<0.008) st.cracks.splice(c,1);
+      }
+      acc+=v2*gains.fire*TRIM.fire;
+    }
+
+    if(gains.fan){
+      /* two cascaded one-poles for the air rush, a blade tone with a couple of
+         harmonics, and a slow wobble so it breathes like a real motor */
+      st.fanLo  += 0.020*(brown-st.fanLo);
+      st.fanLo2 += 0.020*(st.fanLo-st.fanLo2);
+      var v3=st.fanLo2*3.2;
+      st.fanPh += 6.283*96/sr; if(st.fanPh>6.283) st.fanPh-=6.283;
+      v3 += Math.sin(st.fanPh)*0.030 + Math.sin(st.fanPh*2)*0.012;
+      st.fanWob += 6.283*0.6/sr;
+      v3 *= 0.87+0.13*Math.sin(st.fanWob);
+      acc+=v3*gains.fan*TRIM.fan;
+    }
+
+    if(gains.surf){
+      /* swells: a slow envelope with the hiss band riding the crest */
+      st.surfPh += 6.283/(sr*9.5);
+      var env=Math.pow((Math.sin(st.surfPh)*0.5+0.5),1.7);
+      st.surfLo += 0.010*(w-st.surfLo);
+      st.surfHiss += 0.30*(w-st.surfHiss);
+      acc+=(st.surfLo*2.4 + st.surfHiss*0.22*env)*(0.35+0.65*env)*gains.surf*TRIM.surf;
+    }
+
+    if(gains.stream){
+      /* brighter band with short burbles rolling through it */
+      st.strLo += 0.18*(w-st.strLo);
+      var v4=st.strLo*0.7;
+      if(Math.random()<0.004) st.burbles.push({e:0.5+Math.random()*0.5,
+                                               p:0, f:300+Math.random()*900,
+                                               d:0.9990+Math.random()*0.0006});
+      for(var b=st.burbles.length-1;b>=0;b--){
+        var u=st.burbles[b];
+        u.p+=6.283*u.f/sr; u.e*=u.d; u.f*=0.99997;
+        v4+=Math.sin(u.p)*u.e*0.020;
+        if(u.e<0.01) st.burbles.splice(b,1);
+      }
+      acc+=v4*gains.stream*TRIM.stream;
+    }
+
+    /* tanh asymptotes to exactly 1, so the output cannot leave [-1,1] no
+       matter how many layers are stacked; below ~0.3 it is within 3% of
+       linear, so it does not colour a normal mix. */
+    out[i]=Math.tanh(acc*0.95);
+  }
+}
+
+function openAudio(){
+  if(audio){ try{audio.resume()}catch(e){} return audio; }
+  try{
+    audio=new (window.AudioContext||window.webkitAudioContext)();
+    var b=audio.createBuffer(1,1,22050), s=audio.createBufferSource();
+    s.buffer=b; s.connect(audio.destination); s.start(0); audio.resume();
+  }catch(e){ audio=null; }
+  return audio;
+}
+/* Exponential from 180 Hz to 18 kHz. At the bottom only the low layers get
+   through, which is the fastest way to take the edge off any mix. */
+function toneHz(){ return 180*Math.pow(100, tone/100); }
+function anyLayer(){ return LAYERS.some(function(L){return L.v>0;}); }
+function gainMap(){
+  var g={}; LAYERS.forEach(function(L){ g[L.k]=L.v; }); return g;
+}
+function startNoise(fadeIn){
+  stopNoise(0);
+  if(!anyLayer()) return;
+  var ac=openAudio(); if(!ac) return;
+  var st=makeState(ac.sampleRate);
+  proc=ac.createScriptProcessor(4096,1,1);
+  proc.onaudioprocess=function(ev){
+    renderNoise(ev.outputBuffer.getChannelData(0), st, gainMap());
+  };
+  toneNode=ac.createBiquadFilter();
+  toneNode.type='lowpass'; toneNode.Q.value=0.707;
+  toneNode.frequency.value=toneHz();
+  procGain=ac.createGain();
+  procGain.gain.setValueAtTime(0.0001,ac.currentTime);
+  procGain.gain.exponentialRampToValueAtTime(Math.max(0.001,master),
+                                             ac.currentTime+(fadeIn||4));
+  proc.connect(toneNode); toneNode.connect(procGain); procGain.connect(ac.destination);
+}
+function stopNoise(fadeS){
+  clearTimeout(noiseOffT); noiseOffT=null;
+  if(!proc) return;
+  var p=proc, g=procGain, t=toneNode; proc=null; procGain=null; toneNode=null;
+  function kill(){ try{p.disconnect(); g.disconnect(); if(t)t.disconnect(); p.onaudioprocess=null;}catch(e){} }
+  if(fadeS&&audio&&g){
+    try{
+      g.gain.cancelScheduledValues(audio.currentTime);
+      g.gain.setValueAtTime(Math.max(0.001,g.gain.value),audio.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001,audio.currentTime+fadeS);
+    }catch(e){}
+    setTimeout(kill,fadeS*1000+200);
+  } else kill();
+}
+
+/* ================= the light ================= */
+var WARM=[255,241,224], COOL=[232,246,255];
+function stops(){
+  return [{p:0.00,c:[8,0,0]},{p:0.14,c:[58,6,0]},{p:0.32,c:[140,28,2]},
+          {p:0.50,c:[210,78,12]},{p:0.68,c:[246,150,58]},
+          {p:0.82,c:[252,206,140]},{p:0.92,c:[250,238,214]},
+          {p:1.00,c: endTone==='warm'?WARM:COOL}];
+}
+function mix(e){
+  var S=stops();
+  for(var i=1;i<S.length;i++){
+    if(e<=S[i].p){
+      var a=S[i-1],b=S[i],k=(e-a.p)/(b.p-a.p);
+      return [0,1,2].map(function(j){return Math.round(a.c[j]+(b.c[j]-a.c[j])*k);});
+    }
+  }
+  return S[S.length-1].c;
+}
+function paint(p){
+  p=Math.max(0,Math.min(1,p));
+  if(p<=0){ sky.style.background='#000'; return 0; }
+  var e=p*p, conv=Math.max(0,(p-0.55)/0.45);
+  var lag=0.30*(1-conv), dim=0.55+0.45*conv, reach=6+p*p*130;
+  var hot=mix(e), edge=mix(Math.max(0,e-lag));
+  var outer=edge.map(function(v){return Math.round(v*dim);});
+  sky.style.background='radial-gradient(circle at 50% 58%, rgb('+hot.join(',')+') 0%, '+
+    'rgb('+edge.join(',')+') '+reach.toFixed(1)+'%, rgb('+outer.join(',')+') 100%)';
+  return p;
+}
+
+/* ================= screen ================= */
+function videoFallback(){
+  try{
+    var c=document.createElement('canvas'); c.width=c.height=2;
+    var g=c.getContext('2d');
+    setInterval(function(){g.fillStyle='#000';g.fillRect(0,0,2,2);},1000);
+    vid.srcObject=c.captureStream(1); vid.loop=true; vid.muted=true;
+    var p=vid.play();
+    if(p&&p.then) p.then(function(){if(lockHow==='none')lockHow='video';}).catch(function(){});
+    else if(lockHow==='none') lockHow='video';
+  }catch(e){}
+}
+async function awake(){
+  if(navigator.wakeLock){
+    try{ lock=await navigator.wakeLock.request('screen'); lockHow='wakelock';
+         lock.addEventListener('release',function(){lock=null;}); return; }catch(e){}
+  }
+  videoFallback();
+}
+function releaseAwake(){
+  if(lock){try{lock.release()}catch(e){} lock=null;}
+  try{vid.pause(); vid.srcObject=null;}catch(e){}
+  lockHow='none';
+}
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible'&&running){
+    if(!lock) awake();
+    refreshWake();
+  }
+});
+function fullscreen(){
+  var el=document.documentElement, fn=el.requestFullscreen||el.webkitRequestFullscreen;
+  if(fn){try{var r=fn.call(el,{navigationUI:'hide'}); if(r&&r.catch) r.catch(function(){});}catch(e){}}
+}
+
+/* ================= wake time =================
+   Strict at arming, or setting 06:30 at 06:31 would put the ramp in the past.
+   Afterwards a two-hour grace keeps it from rolling to tomorrow the moment it
+   arrives, while still tracking the wall clock across a zone or DST change. */
+function nextWake(strict){
+  var t=new Date(); t.setHours(wakeHH,wakeMM,0,0);
+  if(t.getTime()-Date.now() < (strict?0:-2*3600*1000)) t.setDate(t.getDate()+1);
+  return t;
+}
+function refreshWake(){ if(byClock&&!arrived&&mode==='sunrise') wakeAt=nextWake(false); }
+
+function setClockAlarm(t){
+  if(backupMode==='off') return;
+  var b=new Date(t.getTime()+(backupMode==='2'?120000:0));
+  try{
+    location.href='intent://#Intent;action=android.intent.action.SET_ALARM;'+
+      'i.android.intent.extra.alarm.HOUR='+b.getHours()+';'+
+      'i.android.intent.extra.alarm.MINUTES='+b.getMinutes()+';'+
+      'S.android.intent.extra.alarm.MESSAGE=Sunrise;'+
+      'B.android.intent.extra.alarm.SKIP_UI=true;end';
+  }catch(e){}
+}
+
+/* ================= overlay ================= */
+function untilText(ms){
+  var m=Math.max(0,Math.round(ms/60000)), h=Math.floor(m/60);
+  if(ms<60000) return Math.max(0,Math.round(ms/1000))+' sec';
+  if(h<1) return m+' min';
+  return h+' hr '+(m%60)+' min';
+}
+function flash(ms){
+  if(mode==='sunrise'&&wakeAt){
+    $('o_main').textContent = arrived ? 'wake time' : untilText(wakeAt-Date.now())+' until wake';
+    $('o_sub').textContent = 'light starts '+durMin+' min before'+
+      (backupMode==='off' ? ' \u00b7 no Clock alarm set' : ' \u00b7 Clock alarm set');
+  } else {
+    $('o_main').textContent='clock';
+    $('o_sub').textContent = anyLayer()? 'noise running' : '';
+  }
+  $('o_diag').textContent =
+    (lockHow==='wakelock'?'screen lock held':lockHow==='video'?'screen held by video fallback':'screen lock NOT held')+
+    ((document.fullscreenElement||document.webkitFullscreenElement)?' \u00b7 fullscreen':' \u00b7 not fullscreen');
+  overlay.classList.add('show');
+  clearTimeout(hideT);
+  hideT=setTimeout(function(){overlay.classList.remove('show');},ms||5000);
+}
+
+/* ================= loop ================= */
+function stopLoop(){
+  if(loopId==null) return;
+  if(loopRaf) cancelAnimationFrame(loopId); else clearTimeout(loopId);
+  loopId=null;
+}
+function schedule(smooth){
+  stopLoop(); loopRaf=smooth;
+  loopId = smooth ? requestAnimationFrame(tick) : setTimeout(tick, showSec?250:1000);
+}
+function tick(){
+  if(!running){ loopId=null; return; }
+  var now=Date.now(), p=0;
+  if(mode==='sunrise'&&wakeAt){
+    refreshWake();
+    p=paint((now-(wakeAt-durMin*60000))/(durMin*60000));
+    if(!arrived&&now>=wakeAt) arrived=true;
+  }
+  drawClock(new Date(now));
+  svg.style.opacity = p>0.45 ? Math.max(0,1-(p-0.45)/0.35).toFixed(2) : 1;
+  schedule(p>0 && p<1);
+}
+
+/* ================= start / stop ================= */
+function start(){
+  fullscreen();
+  if(auditioning){ auditioning=false; $('audition').textContent='Audition the mix'; }
+  running=true; arrived=false; byClock=true;
+  if(mode==='sunrise'){
+    var v=$('waketime').value.split(':');
+    wakeHH=+v[0]; wakeMM=+v[1];
+    wakeAt=nextWake(true);
+    setClockAlarm(wakeAt);
+  } else { wakeAt=null; sky.style.background='#000'; }
+  save(); awake();
+  if(anyLayer()){
+    startNoise(4);
+    if(noiseFor>0) noiseOffT=setTimeout(function(){stopNoise(30);}, noiseFor*60000);
+  }
+  setup.style.display='none'; night.style.display='block';
+  svg.style.opacity=1; lastKey=''; fit();
+  clearInterval(backstop);
+  backstop=setInterval(function(){
+    refreshWake();
+    if(mode==='sunrise'&&wakeAt&&!arrived&&Date.now()>=wakeAt) arrived=true;
+  },1000);
+  flash(6000);
+  tick();
+}
+function stop(){
+  running=false; stopLoop(); clearInterval(backstop); backstop=null;
+  stopNoise(1); releaseAwake();
+  wakeAt=null; arrived=false; lastKey='';
+  overlay.classList.remove('show');
+  sky.style.background='#000';
+  night.style.display='none'; setup.style.display='block';
+}
+$('stop').addEventListener('click',function(e){e.stopPropagation(); stop();});
+night.addEventListener('click',function(){
+  if(!document.fullscreenElement&&!document.webkitFullscreenElement) fullscreen();
+  flash(5000);
+});
+
+/* ================= controls ================= */
+function showMode(){
+  $('sunblock').style.display = mode==='sunrise' ? 'block':'none';
+  press('mode',mode,'m');
+}
+$('mode').addEventListener('click',function(e){
+  var b=e.target.closest('.chip'); if(!b) return;
+  mode=b.dataset.m; showMode(); save();
+});
+$('durs').addEventListener('click',function(e){
+  var b=e.target.closest('.chip'); if(!b) return;
+  durMin=+b.dataset.min; press('durs',durMin,'min'); $('durcustom').value=''; save();
+});
+$('durcustom').addEventListener('input',function(){
+  var v=parseInt(this.value,10);
+  if(v>0&&v<=180){ durMin=v; press('durs',-1,'min'); save(); }
+});
+$('endtone').addEventListener('click',function(e){
+  var b=e.target.closest('.chip'); if(!b) return;
+  endTone=b.dataset.e; press('endtone',endTone,'e'); save();
+});
+$('backup').addEventListener('click',function(e){
+  var b=e.target.closest('.chip'); if(!b) return;
+  backupMode=b.dataset.b; press('backup',backupMode,'b'); save();
+});
+$('bright').addEventListener('input',function(){ brightPos=+this.value; colour(); });
+$('bright').addEventListener('change',save);
+$('fmt').addEventListener('click',function(e){
+  var b=e.target.closest('.chip'); if(!b) return;
+  if(b.dataset.f==='sec'){ showSec=!showSec; b.setAttribute('aria-pressed',showSec?'true':'false'); layout(); }
+  else {
+    hour12=(b.dataset.f==='12');
+    this.children[0].setAttribute('aria-pressed',hour12?'false':'true');
+    this.children[1].setAttribute('aria-pressed',hour12?'true':'false');
+    lastKey='';
+  }
+  save();
+});
+$('rot').addEventListener('click',function(e){
+  var b=e.target.closest('.chip'); if(!b) return;
+  rotMode=b.dataset.r; press('rot',rotMode,'r'); fit(); save();
+});
+$('noisefor').addEventListener('click',function(e){
+  var b=e.target.closest('.chip'); if(!b) return;
+  noiseFor=+b.dataset.m; press('noisefor',noiseFor,'m'); save();
+});
+function toneLabel(){
+  var f=toneHz();
+  $('vTone').textContent = f>=1000 ? (f/1000).toFixed(1)+' kHz' : Math.round(f)+' Hz';
+}
+$('tone').addEventListener('input',function(){
+  tone=+this.value; toneLabel();
+  if(toneNode&&audio) toneNode.frequency.setTargetAtTime(toneHz(),audio.currentTime,0.05);
+});
+$('tone').addEventListener('change',save);
+$('master').addEventListener('input',function(){
+  master=this.value/100;
+  $('vMaster').textContent=this.value+'%';
+  if(procGain&&audio) procGain.gain.setTargetAtTime(master,audio.currentTime,0.05);
+});
+$('master').addEventListener('change',save);
+
+/* mixer rows */
+LAYERS.forEach(function(L){
+  var row=document.createElement('div'); row.className='mix'; row.dataset.k=L.k;
+  row.innerHTML='<span class="name">'+L.n+'</span>'+
+    '<input type="range" min="0" max="100" step="1" value="'+Math.round(L.v*100)+'" aria-label="'+L.n+'">'+
+    '<span class="pct">'+Math.round(L.v*100)+'</span>';
+  var r=row.querySelector('input'), pct=row.querySelector('.pct');
+  r.addEventListener('input',function(){
+    L.v=this.value/100;
+    pct.textContent=this.value;
+    row.classList.toggle('live',L.v>0);
+    /* a layer turned up while nothing is playing should start the engine */
+    if(auditioning&&!proc&&anyLayer()) startNoise(0.5);
+  });
+  r.addEventListener('change',save);
+  row.classList.toggle('live',L.v>0);
+  $('mixer').appendChild(row);
+});
+
+$('audition').addEventListener('click',function(){
+  if(auditioning){ auditioning=false; stopNoise(0.5); this.textContent='Audition the mix'; return; }
+  if(!anyLayer()){ return; }
+  auditioning=true; startNoise(1.5); this.textContent='Stop audition';
+});
+$('go').addEventListener('click',start);
+
+/* ================= boot ================= */
+press('durs',durMin,'min');
+if(!document.querySelector('#durs .chip[aria-pressed="true"]')) $('durcustom').value=durMin;
+press('endtone',endTone,'e'); press('backup',backupMode,'b');
+press('rot',rotMode,'r'); press('noisefor',noiseFor,'m');
+$('fmt').children[0].setAttribute('aria-pressed',hour12?'false':'true');
+$('fmt').children[1].setAttribute('aria-pressed',hour12?'true':'false');
+$('fmt').children[2].setAttribute('aria-pressed',showSec?'true':'false');
+$('bright').value=brightPos;
+$('tone').value=tone; toneLabel();
+$('master').value=Math.round(master*100);
+$('vMaster').textContent=Math.round(master*100)+'%';
+showMode(); colour(); layout();
+(function(){
+  var standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+  if(!standalone){
+    $('installnote').innerHTML='Running in a browser tab. Chrome menu \u2192 <b>Install app</b>, '+
+      'then launch from the icon \u2014 that removes the address bar and enables the real screen lock.';
+    $('installnote').style.color='#c08a4a';
+  }
+})();
+})();
+</script>
+</body>
+</html>
